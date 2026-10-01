@@ -1,0 +1,13 @@
+﻿# Generated data, feature caches and results
+data/generated/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
