@@ -1,11 +1,11 @@
 """B3: high-resolution detail without spatial decomposition, for the
-fine-grained X-TAIL domains. Each image (same indices as `scripts/xtail_encode_patches.py`) is
+fine-grained X-TAIL domains. Each image (same indices as `scripts/experiments/xtail_encode_patches.py`) is
 resized (short side 448, bicubic), center-cropped to 448, and split into four 224 tiles; each tile
 is encoded as an ordinary image. Stored: the mean of the four tiles' global embeddings
 (`tiles_global`, re-normalized) and of their patch means (`tiles_patch_mean`).
 
 Usage:
-    python scripts/xtail_encode_tiles.py
+    python scripts/experiments/xtail_encode_tiles.py
 """
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ import sys
 import time
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
@@ -22,10 +22,11 @@ import torch  # noqa: E402
 from torch.utils.data import DataLoader, Dataset  # noqa: E402
 
 from data.real.xtail import clip_preprocess, load_domain  # noqa: E402
+from data.real.xtail import XTAIL_ROOT  # noqa: E402
 from scripts.xtail_encode import MODEL  # noqa: E402
-from scripts.xtail_encode_patches import FINE, OUT as PATCH_DIR  # noqa: E402
+from scripts.experiments.xtail_encode_patches import FINE, OUT as PATCH_DIR  # noqa: E402
 
-OUT = Path("D:/xtail_data/features/vitb16_tiles")
+OUT = (XTAIL_ROOT / "features/vitb16_tiles")
 
 
 def log(msg):

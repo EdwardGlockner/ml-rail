@@ -1,0 +1,16 @@
+# Versions used for the reported results (Python 3.11). For a GPU build of torch, install it first from
+# https://pytorch.org/get-started/locally/ and then the rest of this file.
+torch==2.14.0
+torchvision==0.29.0
+transformers==5.17.0
+numpy==2.4.6
+scikit-learn==1.9.1
+matplotlib==3.11.1
+pillow==12.3.0
+# dataset download and preparation (scripts/setup_xtail_data.py)
+pyarrow==25.0.1
+huggingface_hub==1.31.0
+gdown==6.4.1
+PyYAML==6.0.3
+# tests
+pytest==9.1.1

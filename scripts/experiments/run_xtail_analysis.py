@@ -1,4 +1,4 @@
-"""X-TAIL 10 domains, RAIL's single prompt, ML-RAIL features.
+"""Gate and per-domain analyses on X-TAIL (10 domains, RAIL's single prompt, ML-RAIL features).
 
 --part headroom: ML-RAIL under RAIL's gate (G0), an oracle-membership gate (G1) and an
     oracle-domain gate (G2), validation seed 100 and test seeds 1-5, plus G0's misrouting rates.
@@ -6,8 +6,8 @@
     residual (A4) vs. ML-RAIL, validation seed 100.
 --part test --candidates A1,A4 (the registered test rule): seeds 1-5 vs. ML-RAIL.
 
-Usage (gentle mode):
-    python scripts/run_xtail_analysis.py --part headroom
+Usage (low-load settings, see README):
+    python scripts/experiments/run_xtail_analysis.py --part headroom
 """
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ import sys
 import time
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
@@ -25,13 +25,11 @@ import numpy as np  # noqa: E402
 import torch  # noqa: E402
 
 from evaluation import xtail_protocol as xp  # noqa: E402
-from scripts.run_xtail_improve import blocks_feature, load_with_extra  # noqa: E402
+from evaluation.ml_rail import BLOCKS, SLICES, make_ml_rail  # noqa: E402
+from evaluation import xtail_variants as xv  # noqa: E402
+from evaluation.ml_rail import blocks_feature, load_with_extra  # noqa: E402
 
 OUT = REPO_ROOT / "data" / "generated" / "xtail"
-APRIME = ("global", "cls10", "patch_mean", "gem8", "gem10")
-DIMS = [512 if b in ("global", "patch_mean") else 768 for b in APRIME]
-EDGES = np.cumsum([0] + DIMS)
-SLICES = [(int(EDGES[i]), int(EDGES[i + 1])) for i in range(len(DIMS))]
 VAL_SEED, TEST_SEEDS = 100, (1, 2, 3, 4, 5)
 WEIGHTS = (0.5, 0.6, 0.7, 0.8, 0.9, 1.0)
 
@@ -40,19 +38,15 @@ def log(msg):
     print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
 
 
-def aprime():
-    return xp.DualRAIL(gamma=0.2, lam=1e-3, dtype=torch.float32)
-
-
 CANDIDATES = {  # name -> (model factory, fusion weights evaluated; the first is the registered one)
-    "Aprime": (aprime, [0.8]),
-    "C0": (lambda: xp.PerDomainKRR(SLICES), [0.8]),
-    "A1": (lambda: xp.PerDomainKRR(SLICES, gammas=(0.2, 0.05, 0.1, 0.4, 0.8), lams=(1e-3, 1e-4, 1e-2, 1e-1),
+    "Aprime": (make_ml_rail, [0.8]),
+    "C0": (lambda: xv.PerDomainKRR(SLICES), [0.8]),
+    "A1": (lambda: xv.PerDomainKRR(SLICES, gammas=(0.2, 0.05, 0.1, 0.4, 0.8), lams=(1e-3, 1e-4, 1e-2, 1e-1),
                                    weights=WEIGHTS), ["method", 0.8]),
-    "A2": (lambda: xp.PerDomainKRR(SLICES, gammas=(0.2,), lams=(1e-3, 1e-4, 1e-2, 1e-1), block_mults=(0.0, 0.5, 1.0, 2.0),
+    "A2": (lambda: xv.PerDomainKRR(SLICES, gammas=(0.2,), lams=(1e-3, 1e-4, 1e-2, 1e-1), block_mults=(0.0, 0.5, 1.0, 2.0),
                                    weights=WEIGHTS), ["method", 0.8]),
-    "A1w": (lambda: xp.JointLOOWeight(gamma=0.2, lam=1e-3, weights=WEIGHTS), ["method", 0.8]),
-    "A4": (lambda: xp.GatedResidual(gamma=0.2, lam=1e-3, dtype=torch.float32), list(WEIGHTS)),
+    "A1w": (lambda: xv.JointLOOWeight(gamma=0.2, lam=1e-3, weights=WEIGHTS), ["method", 0.8]),
+    "A4": (lambda: xv.GatedResidual(gamma=0.2, lam=1e-3, dtype=torch.float32), list(WEIGHTS)),
 }
 
 
@@ -70,7 +64,7 @@ def misrouting(data, zs):
 
 def headroom():
     data = load_with_extra("single")
-    feat = blocks_feature(APRIME)
+    feat = blocks_feature(BLOCKS)
     results = []
     for split, seeds in (("val", (VAL_SEED,)), ("test", TEST_SEEDS)):
         zs = xp.zero_shot_probs(data, split=split)
@@ -80,7 +74,7 @@ def headroom():
         for seed in seeds:
             for gate in ("rail", "oracle", "oracle_domain"):
                 t0 = time.time()
-                table = xp.run_stream(data, aprime(), seed, feat=feat, fusion_weight=0.8, zs=zs, split=split, gate=gate)
+                table = xp.run_stream(data, make_ml_rail(), seed, feat=feat, fusion_weight=0.8, zs=zs, split=split, gate=gate)
                 r = {"split": split, "seed": seed, "gate": gate, **xp.metrics(table), **route, "table": table.tolist()}
                 results.append(r)
                 json.dump(results, open(OUT / "gate_headroom.json", "w"), indent=1)
@@ -100,7 +94,7 @@ def gates():
     """Looser zero-shot gates. Validation picks the best Average among gates with Transfer
     within 0.2 of RAIL's; then RAIL vs. that gate on test seeds 1-5 (the registered rule)."""
     data = load_with_extra("single")
-    feat = blocks_feature(APRIME)
+    feat = blocks_feature(BLOCKS)
     path = OUT / "gates.json"
     results = json.load(open(path)) if path.exists() else []
 
@@ -108,7 +102,7 @@ def gates():
         if any(r["split"] == split and r["seed"] == seed and r["gate"] == gate for r in results):
             return next(r for r in results if r["split"] == split and r["seed"] == seed and r["gate"] == gate)
         t0 = time.time()
-        table = xp.run_stream(data, aprime(), seed, feat=feat, fusion_weight=0.8, zs=zs, split=split, gate=gate)
+        table = xp.run_stream(data, make_ml_rail(), seed, feat=feat, fusion_weight=0.8, zs=zs, split=split, gate=gate)
         r = {"split": split, "seed": seed, "gate": gate, **xp.metrics(table), "table": table.tolist()}
         results.append(r)
         json.dump(results, open(path, "w"), indent=1)
@@ -133,7 +127,7 @@ def gates():
 
 def run_candidates(names, split, seeds, out_name):
     data = load_with_extra("single")
-    feat = blocks_feature(APRIME)
+    feat = blocks_feature(BLOCKS)
     zs = xp.zero_shot_probs(data, split=split)
     path = OUT / out_name
     results = json.load(open(path)) if path.exists() else []

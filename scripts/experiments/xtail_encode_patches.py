@@ -7,7 +7,7 @@ splits). Stores the projected, L2-normalized final-layer patch tokens (196 x 512
 global embedding, in the 14 x 14 grid order.
 
 Usage:
-    python scripts/xtail_encode_patches.py
+    python scripts/experiments/xtail_encode_patches.py
 """
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ import sys
 import time
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
@@ -24,10 +24,11 @@ import torch  # noqa: E402
 from torch.utils.data import DataLoader  # noqa: E402
 
 from data.real.xtail import load_domain  # noqa: E402
+from data.real.xtail import XTAIL_ROOT  # noqa: E402
 from scripts.xtail_encode import MODEL, OUT as FEAT_DIR, Images, pool_indices  # noqa: E402
 
 FINE = ("aircraft", "oxford_flowers", "food101", "oxford_pets", "stanford_cars")
-OUT = Path("D:/xtail_data/features/vitb16_patches")
+OUT = (XTAIL_ROOT / "features/vitb16_patches")
 TEST_CAP = 25
 
 

@@ -8,7 +8,7 @@ kernel ridge; gamma and lambda chosen on validation per pooling (mean over domai
 subset of <= 25 images per class (diagnostics only).
 
 Usage:
-    python scripts/run_xtail_spatial.py --seeds 0,1,2
+    python scripts/experiments/run_xtail_spatial.py --seeds 0,1,2
 """
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ import sys
 import time
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
@@ -27,8 +27,9 @@ import numpy as np  # noqa: E402
 import torch  # noqa: E402
 
 from data.real.xtail import DOMAINS  # noqa: E402
+from data.real.xtail import XTAIL_ROOT  # noqa: E402
 from evaluation import xtail_protocol as xp  # noqa: E402
-from scripts.xtail_encode_patches import FINE, OUT as PATCH_DIR  # noqa: E402
+from scripts.experiments.xtail_encode_patches import FINE, OUT as PATCH_DIR  # noqa: E402
 
 OUT = REPO_ROOT / "data" / "generated" / "xtail"
 GAMMAS = (0.1, 0.2, 0.4, 0.8)
@@ -125,7 +126,7 @@ def main(seeds):
             json.dump(results, f, indent=1)
 
 
-LAYER_DIR = Path("D:/xtail_data/features/vitb16_layerpatch")
+LAYER_DIR = (XTAIL_ROOT / "features/vitb16_layerpatch")
 KS = (4, 8, 16)
 
 
@@ -199,7 +200,7 @@ def phase2(seeds):
             json.dump(results, f, indent=1)
 
 
-TILE_DIR = Path("D:/xtail_data/features/vitb16_tiles")
+TILE_DIR = (XTAIL_ROOT / "features/vitb16_tiles")
 
 
 def phase3(seeds):

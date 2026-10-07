@@ -5,7 +5,7 @@
 2. Can a two-signal AND rule (two thresholds, chosen on validation) match the logistic gate?
 
 Usage (after run_xtail_gatesep.py):
-    python scripts/run_xtail_gatesep_explore.py
+    python scripts/experiments/run_xtail_gatesep_explore.py
 """
 from __future__ import annotations
 
@@ -13,14 +13,14 @@ import itertools
 import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 import numpy as np  # noqa: E402
 from sklearn.linear_model import LogisticRegression  # noqa: E402
 
-from scripts.run_xtail_gatesep import OUT, SIGNALS, apply, best_threshold, design  # noqa: E402
+from scripts.experiments.run_xtail_gatesep import OUT, SIGNALS, apply, best_threshold, design  # noqa: E402
 
 V = dict(np.load(OUT / "gate_separability_val.npz"))
 T = dict(np.load(OUT / "gate_separability_test.npz"))

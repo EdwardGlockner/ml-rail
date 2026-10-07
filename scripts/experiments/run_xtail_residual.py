@@ -8,7 +8,7 @@ A^-1 Y and A^-1 Z, give every prior scale c; the gated ML-RAIL baseline uses A^-
 with RAIL's fusion (weight 0.8), computed in the same pass.
 
 Usage:
-    python scripts/run_xtail_residual.py
+    python scripts/experiments/run_xtail_residual.py
 """
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ import sys
 import time
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
@@ -26,13 +26,13 @@ import numpy as np  # noqa: E402
 import torch  # noqa: E402
 
 from evaluation import xtail_protocol as xp  # noqa: E402
-from scripts.run_xtail_improve import blocks_feature, load_with_extra  # noqa: E402
+from evaluation.ml_rail import blocks_feature, load_with_extra  # noqa: E402
 
 OUT = REPO_ROOT / "data" / "generated" / "xtail"
 GAMMAS = (0.2, 0.5, 1.0, 2.0, 4.0)
 LAMS = (1e-3, 1e-2)
 CS = (0.5, 1.0, 2.0)
-APRIME = ("global", "cls10", "patch_mean", "gem8", "gem10")
+BLOCKS = ("global", "cls10", "patch_mean", "gem8", "gem10")
 SEED = 100
 
 
@@ -54,7 +54,7 @@ def main(split="val", w=0.8):
     torch.set_num_threads(2)
     data = load_with_extra("single")
     names = list(data)
-    feat = blocks_feature(APRIME)
+    feat = blocks_feature(BLOCKS)
     text = torch.from_numpy(np.concatenate([data[n]["text"] for n in names]))
     C = len(text)
     shot = {n: xp.fewshot(data[n], SEED, 16, t) for t, n in enumerate(names)}

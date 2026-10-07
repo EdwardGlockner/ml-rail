@@ -1,6 +1,6 @@
 import numpy as np
 
-from scripts import run_xtail_spatial as sp
+from scripts.experiments import run_xtail_spatial as sp
 
 
 def test_grid_regions_tile_the_patch_grid():

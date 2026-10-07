@@ -2,7 +2,7 @@
 capped at 4 images per class (CoOp's few-shot convention, min(shots, 4)) instead of 10?
 
 Usage:
-    python scripts/run_xtail_tune_val4.py
+    python scripts/experiments/run_xtail_tune_val4.py
 """
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ import json
 import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
@@ -19,7 +19,7 @@ import numpy as np  # noqa: E402
 import torch  # noqa: E402
 
 from evaluation import xtail_protocol as xp  # noqa: E402
-from scripts.run_xtail_tune import BLOCK_SETS, SEED, WEIGHTS, block_feature  # noqa: E402
+from scripts.experiments.run_xtail_tune import BLOCK_SETS, SEED, WEIGHTS, block_feature  # noqa: E402
 
 OUT = REPO_ROOT / "data" / "generated" / "xtail"
 

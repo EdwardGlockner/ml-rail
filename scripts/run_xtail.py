@@ -1,8 +1,9 @@
-"""Run methods on the X-TAIL protocol (cached CLIP ViT-B/16 features) and save the 10x10 tables.
+"""Run single methods on the X-TAIL protocol (cached CLIP ViT-B/16 features) and save the 10x10 tables;
+used for the RAIL replication. The reported results come from scripts/evaluate.py.
 
-Published reference (RAIL paper, Table 1, X-TAIL 16-shot, order I; per-domain Last row):
+Published reference (RAIL, arXiv:2406.18868v3, Table 1, X-TAIL 16-shot, order I; per-domain Last row):
   Primal-RAIL  Transfer 62.4  Average 70.7  Last 79.1
-  Dual-RAIL    Transfer 62.4  Average 71.3  Last 82.4
+  Dual-RAIL    Transfer 62.4  Average 71.9  Last 82.4
 Usage:
     python scripts/run_xtail.py --methods zeroshot,primal,dual --seeds 0
 """
@@ -18,46 +19,33 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+import os  # noqa: E402
+
 import numpy as np  # noqa: E402
+import torch  # noqa: E402
 
 from data.real.xtail import DOMAINS  # noqa: E402
 from evaluation import xtail_protocol as xp  # noqa: E402
+from evaluation.ml_rail import BLOCKS, EXTRA, blocks_feature, make_ml_rail  # noqa: E402
 
 OUT = REPO_ROOT / "data" / "generated" / "xtail"
 PUBLISHED = {
     "primal": {"transfer": 62.4, "average": 70.7, "last": 79.1,
                "last_row": [41.7, 94.0, 66.0, 86.4, 97.2, 82.4, 93.1, 83.6, 75.0, 71.3]},
-    "dual": {"transfer": 62.4, "average": 71.3, "last": 82.4,
+    "dual": {"transfer": 62.4, "average": 71.9, "last": 82.4,
              "last_row": [45.3, 94.2, 69.0, 87.0, 97.2, 87.2, 93.0, 92.4, 82.5, 76.3]},
 }
-import os  # noqa: E402
-import torch  # noqa: E402
 
-# kernel-solve precision: float64 as RAIL (default); XTAIL_DTYPE=float32 for "gentle mode" (much lighter
-# on a consumer GPU; checked against float64 on one seed, results file names get a _fp32 suffix)
+# kernel-solve precision: float64 as RAIL (default); XTAIL_DTYPE=float32 is much lighter on a consumer GPU
+# and within 0.05 points of float64 (results file names get a _fp32 suffix)
 DTYPE = torch.float32 if os.environ.get("XTAIL_DTYPE") == "float32" else torch.float64
 
 METHODS = {  # name -> (factory, features, fusion weight)
     "zeroshot": (lambda: xp.ZeroShot(), "global", 0.8),
     "primal": (lambda: xp.PrimalRAIL(width=15000, reg=0.1), "global", 0.8),
     "dual": (lambda: xp.DualRAIL(gamma=0.1, lam=0.001, dtype=DTYPE), "global", 0.8),
-    # Chosen on validation only (scripts/run_xtail_tune.py, tune_val.json):
-    # global + layer-10 class token + patch mean, gamma 0.2, lambda 1e-3, fusion 0.8
-    "A": (lambda: xp.DualRAIL(gamma=0.2, lam=0.001, dtype=DTYPE), ("global", "cls10", "patch_mean"), 0.8),
-    # Chosen on validation (improve_stage1_val.json, improve_stage2_val.json); run with
-    # --prompts ensemble, and compare against "dual" run with --prompts ensemble (fairness rule)
-    "Aprime": (lambda: xp.DualRAIL(gamma=0.2, lam=0.001, dtype=DTYPE), ("global", "cls10", "patch_mean", "gem8", "gem10"), 0.8),
+    "mlrail": (lambda: make_ml_rail(DTYPE), BLOCKS, 0.8),
 }
-EXTRA = Path("D:/xtail_data/features/vitb16_extra")
-
-
-def features_for(spec):
-    if isinstance(spec, str):
-        return spec
-    # normalizes every block (the GeM blocks are not cached normalized); identical to the tuning
-    # helper for blocks that already are (global, cls*, patch_mean)
-    from scripts.run_xtail_improve import blocks_feature
-    return blocks_feature(spec)
 
 
 def log(msg):
@@ -72,7 +60,7 @@ def main(methods, seeds, domains, prompts="single", shots=16, tag=""):
     elif prompts != "single":  # other text heads (evaluation/xtail_prompts.py), e.g. "t1b+generic"
         from evaluation.xtail_prompts import build_text
         build_text(data, prompts)
-    if any(not isinstance(METHODS[m][1], str) and ("gem8" in METHODS[m][1]) for m in methods):
+    if any(not isinstance(METHODS[m][1], str) for m in methods):
         for n, d in data.items():
             z = np.load(EXTRA / f"{n}.npz")
             d.update({k: z[k] for k in z.files if k.endswith(("gem8", "gem10"))})
@@ -82,7 +70,8 @@ def main(methods, seeds, domains, prompts="single", shots=16, tag=""):
         for name in methods:
             t0 = time.time()
             factory, feat, w = METHODS[name]
-            table = xp.run_stream(data, factory(), seed, feat=features_for(feat), fusion_weight=w, zs=zs, shots=shots)
+            feat = feat if isinstance(feat, str) else blocks_feature(feat)
+            table = xp.run_stream(data, factory(), seed, feat=feat, fusion_weight=w, zs=zs, shots=shots)
             m = xp.metrics(table)
             res = {"method": name, "seed": seed, "domains": list(domains), "shots": shots, "metrics": m, "table": table.tolist()}
             res["prompts"] = prompts

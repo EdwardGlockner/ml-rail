@@ -1,14 +1,14 @@
-"""Build the X-TAIL benchmark data (RAIL, NeurIPS 2024; CoOp dataset layout) under D:/xtail_data/datasets.
+"""Build the X-TAIL benchmark data (RAIL, NeurIPS 2024; CoOp dataset layout) under $XTAIL_ROOT/datasets.
 
 Provenance, since several official links are dead (checked 2026-10-01):
-  caltech101, dtd, eurosat, oxford_flowers, fgvc_aircraft  copied from this repo's torchvision downloads
+  caltech101, dtd, eurosat, oxford_flowers, fgvc_aircraft  torchvision downloads, rearranged into the CoOp layout
   food-101, oxford_pets                                    official URLs (ETH, Oxford VGG)
   stanford_cars   official Stanford links dead; rebuilt from HF Multimodal-Fatima/StanfordCars_{train,test},
                   which keeps the original filenames (00001.jpg ...)
   sun397          official Princeton links dead; rebuilt from HF 1aurent/SUN397 (original sun_*.jpg names and
                   class paths; images stored as RGB, so originally non-JPEG files may differ at pixel level);
                   only images named in the CoOp split are written
-  mnist           torchvision
+  mnist, cifar100 torchvision (cifar100 only for the 11-domain 5-shot variant)
   split files     CoOp's split_zhou_*.json from Google Drive (links in CoOp DATASETS.md)
 Finally every path in every split file is checked to exist.
 
@@ -19,17 +19,17 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
-import sys
 import tarfile
 import time
 import urllib.request
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[1]
-GEN = REPO / "data" / "generated"
-ROOT = Path("D:/xtail_data/datasets")
-DL = Path("D:/xtail_data/_downloads")
+# same default as data/real/xtail.py: xtail_data/ in the repository, or $XTAIL_ROOT
+XTAIL_ROOT = Path(os.environ.get("XTAIL_ROOT", Path(__file__).resolve().parents[1] / "xtail_data"))
+ROOT = XTAIL_ROOT / "datasets"
+DL = XTAIL_ROOT / "_downloads"
 
 SPLITS = {  # CoOp Google Drive ids
     "caltech101/split_zhou_Caltech101.json": "1hyarUivQE36mY6jSomru6Fjd-JzwcCzN",
@@ -81,17 +81,28 @@ def splits():
             log(f"split file {rel}: {'ok' if dst.exists() else 'FAILED'}")
 
 
-def local_copies():
-    copytree(GEN / "caltech101_raw" / "caltech101" / "101_ObjectCategories", ROOT / "caltech101" / "101_ObjectCategories")
-    for sub in ("images", "imdb", "labels"):
-        copytree(GEN / "dtd_raw" / "dtd" / "dtd" / sub, ROOT / "dtd" / sub)
-    copytree(GEN / "eurosat_raw" / "eurosat" / "2750", ROOT / "eurosat" / "2750")
-    copytree(GEN / "flowers102_raw" / "flowers-102" / "jpg", ROOT / "oxford_flowers" / "jpg")
-    for f in ("imagelabels.mat", "setid.mat"):
-        src = GEN / "flowers102_raw" / "flowers-102" / f
-        if src.exists() and not (ROOT / "oxford_flowers" / f).exists():
-            shutil.copy(src, ROOT / "oxford_flowers" / f)
-    copytree(GEN / "fgvc_aircraft_raw" / "fgvc-aircraft-2013b" / "data", ROOT / "fgvc_aircraft")
+def torchvision_datasets():
+    """Download five datasets with torchvision and copy them into the CoOp layout RAIL's loaders expect."""
+    from torchvision import datasets
+    tv = DL / "torchvision"
+    if not (ROOT / "caltech101" / "101_ObjectCategories").exists():
+        datasets.Caltech101(str(tv / "caltech101_raw"), download=True)
+        copytree(tv / "caltech101_raw" / "caltech101" / "101_ObjectCategories", ROOT / "caltech101" / "101_ObjectCategories")
+    if not (ROOT / "dtd" / "images").exists():
+        datasets.DTD(str(tv / "dtd_raw"), download=True)
+        for sub in ("images", "imdb", "labels"):
+            copytree(tv / "dtd_raw" / "dtd" / "dtd" / sub, ROOT / "dtd" / sub)
+    if not (ROOT / "eurosat" / "2750").exists():
+        datasets.EuroSAT(str(tv / "eurosat_raw"), download=True)
+        copytree(tv / "eurosat_raw" / "eurosat" / "2750", ROOT / "eurosat" / "2750")
+    if not (ROOT / "oxford_flowers" / "jpg").exists():
+        datasets.Flowers102(str(tv / "flowers102_raw"), download=True)
+        copytree(tv / "flowers102_raw" / "flowers-102" / "jpg", ROOT / "oxford_flowers" / "jpg")
+        for f in ("imagelabels.mat", "setid.mat"):
+            shutil.copy(tv / "flowers102_raw" / "flowers-102" / f, ROOT / "oxford_flowers" / f)
+    if not (ROOT / "fgvc_aircraft" / "images").exists():
+        datasets.FGVCAircraft(str(tv / "fgvc_aircraft_raw"), download=True)
+        copytree(tv / "fgvc_aircraft_raw" / "fgvc-aircraft-2013b" / "data", ROOT / "fgvc_aircraft")
 
 
 def food_pets():
@@ -137,7 +148,6 @@ def sun397():
     have = {str(p.relative_to(base)).replace("\\", "/") for p in base.rglob("*.jpg")} if base.exists() else set()
     if wanted <= have:
         return
-    from huggingface_hub import hf_hub_download
     import yaml  # class-label names live in the dataset card
     card = urllib.request.urlopen(urllib.request.Request("https://huggingface.co/datasets/1aurent/SUN397/raw/main/README.md",
                                                          headers={"User-Agent": "Mozilla/5.0"}), timeout=60).read().decode()
@@ -165,6 +175,12 @@ def mnist():
     datasets.MNIST(str(ROOT / "mnist"), train=False, download=True)
 
 
+def cifar100():
+    from torchvision import datasets
+    datasets.CIFAR100(str(ROOT / "cifar100"), train=True, download=True)
+    datasets.CIFAR100(str(ROOT / "cifar100"), train=False, download=True)
+
+
 def verify():
     ok = True
     for rel in SPLITS:
@@ -183,7 +199,8 @@ def verify():
     log("ALL SPLITS COMPLETE" if ok else "SOME IMAGES MISSING")
 
 
-STEPS = {"splits": splits, "local": local_copies, "food_pets": food_pets, "cars": cars, "sun397": sun397, "mnist": mnist, "verify": verify}
+STEPS = {"splits": splits, "torchvision": torchvision_datasets, "food_pets": food_pets, "cars": cars, "sun397": sun397,
+         "mnist": mnist, "cifar100": cifar100, "verify": verify}
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()

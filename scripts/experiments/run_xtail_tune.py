@@ -7,7 +7,7 @@ to unit length), kernel gamma, ridge lambda, fusion weight. Criterion: Average +
 (Transfer is preserved by the fusion rule). Seed 100 for the 16-shot draws (test seeds are 0-4).
 
 Usage:
-    python scripts/run_xtail_tune.py
+    python scripts/experiments/run_xtail_tune.py
 """
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ import sys
 import time
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 

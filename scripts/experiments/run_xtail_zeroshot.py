@@ -6,7 +6,7 @@ domains on zero-shot), with and without domain-then-class reweighting:
     p(dataset | x) = softmax(100 * cos(x, mean of that dataset's class embeddings)).
 
 Usage:
-    python scripts/run_xtail_zeroshot.py
+    python scripts/experiments/run_xtail_zeroshot.py
 """
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ import json
 import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
@@ -63,7 +63,7 @@ def main():
 
 BETAS = (0.0, 0.25, 0.5, 1.0)  # T2 hub-correction strength
 THRESHOLDS = (None, 0.3, 0.5, 0.7)  # T4: also route to the adapter if its top score >= threshold
-APRIME = ("global", "cls10", "patch_mean", "gem8", "gem10")
+BLOCKS = ("global", "cls10", "patch_mean", "gem8", "gem10")
 
 
 def hub_bias(data, names, learned, shot_idx):
@@ -85,9 +85,9 @@ def hub_bias(data, names, learned, shot_idx):
 
 def stream_grid(data, seed, split="val", w=0.8):
     """One ML-RAIL stream; every (beta, threshold) combination evaluated from the same adapter scores."""
-    from scripts.run_xtail_improve import blocks_feature
+    from scripts.experiments.run_xtail_improve import blocks_feature
     names = list(data)
-    feat = blocks_feature(APRIME)
+    feat = blocks_feature(BLOCKS)
     text = torch.from_numpy(np.concatenate([data[n]["text"] for n in names]))
     shot_idx = {n: xp.fewshot(data[n], seed, 16, t) for t, n in enumerate(names)}
     m = xp.DualRAIL(gamma=0.2, lam=1e-3, dtype=torch.float32)
@@ -119,7 +119,7 @@ def stream_grid(data, seed, split="val", w=0.8):
 
 
 def grid_main(heads=("generic", "t1b+generic"), seed=100):
-    from scripts.run_xtail_improve import load_with_extra
+    from scripts.experiments.run_xtail_improve import load_with_extra
     results = []
     for head in heads:
         data = build_text(load_with_extra("single"), head)

@@ -5,7 +5,7 @@ class's text may use its own dataset's template(s) without any domain hint for t
 
 Heads:
   single    RAIL's prompt, "a photo of a {}."                                   (the benchmark default)
-  generic Tip-Adapter's 7 templates + RAIL's prompt, same for every dataset
+  generic   Tip-Adapter's 7 templates + RAIL's prompt, same for every dataset
   t1a       the single per-dataset templates in RAIL's/CoOp's dataset loaders
   t1b       CLIP's published per-dataset prompt ensembles (third_party/clip_prompts.md)
   t1a+generic, t1b+generic   normalized average of the two heads
@@ -17,6 +17,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from data.real.xtail import XTAIL_ROOT
 
 GENERIC = ("a photo of a {}.", "itap of a {}.", "a bad photo of the {}.", "a origami {}.",
            "a photo of the large {}.", "a {} in a video game.", "art of the {}.", "a photo of the small {}.")
@@ -54,7 +55,7 @@ def head_templates(head: str, domain: str) -> list[tuple[str, ...]]:
     return parts[head]
 
 
-def build_text(data: dict, head: str, cache_dir=Path("D:/xtail_data/features/vitb16_text")) -> dict:
+def build_text(data: dict, head: str, cache_dir=(XTAIL_ROOT / "features/vitb16_text")) -> dict:
     """Set each domain's `text` to the chosen head's class embeddings (cached per head and domain)."""
     cache_dir.mkdir(parents=True, exist_ok=True)
     zs = None

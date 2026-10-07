@@ -6,8 +6,8 @@ would do to its prediction (ML-RAIL, fusion 0.8), weighted by its exact effect o
 test-set size). Per signal: weighted AUC, and the net Average gain of the best threshold chosen on
 validation (seed 100) applied to test (seed 1). s7 = logistic regression on s1-s6, fit on validation.
 
-Usage (gentle mode):
-    python scripts/run_xtail_gatesep.py
+Usage (low-load settings, see README):
+    python scripts/experiments/run_xtail_gatesep.py
 """
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ import sys
 import time
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
@@ -26,8 +26,9 @@ from sklearn.linear_model import LogisticRegression  # noqa: E402
 from sklearn.metrics import roc_auc_score  # noqa: E402
 
 from evaluation import xtail_protocol as xp  # noqa: E402
-from scripts.run_xtail_improve import blocks_feature, load_with_extra  # noqa: E402
-from scripts.run_xtail_analysis import APRIME, aprime  # noqa: E402
+from evaluation import xtail_variants as xv  # noqa: E402
+from evaluation.ml_rail import blocks_feature, load_with_extra  # noqa: E402
+from evaluation.ml_rail import BLOCKS, make_ml_rail  # noqa: E402
 
 OUT = REPO_ROOT / "data" / "generated" / "xtail"
 SIGNALS = ("s1_learned_mass", "s2_top_learned_prob", "s3_adapter_max", "s4_kernel_max", "s5_profile_max", "s6_product_max")
@@ -41,14 +42,14 @@ def collect(data, split, seed, feat):
     names = list(data)
     zs = xp.zero_shot_probs(data, split=split)
     text = torch.as_tensor(np.concatenate([data[n]["text"] for n in names]), device=xp.DEV)
-    model, learned, rows = aprime(), 0, []
+    model, learned, rows = make_ml_rail(), 0, []
     for t, n in enumerate(names[:-1]):  # the last step admits everything: nothing to separate
         d = data[n]
         idx = xp.fewshot(d, seed, 16, t)
         model.add(feat(d, "train", idx), d["train_labels"][idx] + d["offset"])
         learned += d["n_classes"]
         text_l = text[:learned]
-        q_store = torch.cat([xp.learned_zero_shot(model.X[i : i + 4096], text_l) for i in range(0, len(model.X), 4096)]).sqrt()
+        q_store = torch.cat([xv.learned_zero_shot(model.X[i : i + 4096], text_l) for i in range(0, len(model.X), 4096)]).sqrt()
         for j, m in enumerate(names):
             e = data[m]
             p = zs[m]
@@ -66,7 +67,7 @@ def collect(data, split, seed, feat):
             if not keep.any():
                 continue
             Xk = X[keep.to(xp.DEV)]
-            q = xp.learned_zero_shot(Xk, text_l).sqrt()
+            q = xv.learned_zero_shot(Xk, text_l).sqrt()
             s4, s5, s6 = [], [], []
             for i in range(0, len(Xk), 512):
                 K = model._k(Xk[i : i + 512], model.X)
@@ -115,7 +116,7 @@ def design(D):
 
 def main():
     data = load_with_extra("single")
-    feat = blocks_feature(APRIME)
+    feat = blocks_feature(BLOCKS)
     V = collect(data, "val", 100, feat)
     T = collect(data, "test", 1, feat)
     np.savez(OUT / "gate_separability_val.npz", **V)

@@ -7,18 +7,17 @@ Stage 2: A2 (flip-averaged training features; optionally test-time flips), A3 (l
 A4 (sum of per-block RBF kernels), on top of stage 1's best.
 
 Usage:
-    python scripts/run_xtail_improve.py --stage 1
+    python scripts/experiments/run_xtail_improve.py --stage 1
 """
 from __future__ import annotations
 
 import argparse
-import itertools
 import json
 import sys
 import time
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
@@ -26,7 +25,9 @@ import numpy as np  # noqa: E402
 import torch  # noqa: E402
 
 from evaluation import xtail_protocol as xp  # noqa: E402
-from scripts.run_xtail_tune import SEED, block_feature  # noqa: E402
+from evaluation import xtail_variants as xv  # noqa: E402
+from evaluation.ml_rail import blocks_feature, l2, load_with_extra  # noqa: E402,F401
+from scripts.experiments.run_xtail_tune import SEED, block_feature  # noqa: E402
 
 OUT = REPO_ROOT / "data" / "generated" / "xtail"
 A_BLOCKS = ("global", "cls10", "patch_mean")
@@ -57,43 +58,11 @@ def stage1():
         for T in TEMPS:
             def make(T=T):
                 m = xp.DualRAIL(gamma=0.2, lam=1e-3, dtype=torch.float32)
-                return m if T is None else xp.Calibrated(m, T)
+                return m if T is None else xv.Calibrated(m, T)
             evaluate(data, zs, make, block_feature(A_BLOCKS), f"{prompts}_T{T}", results)
         json.dump(results, open(OUT / "improve_stage1_val.json", "w"), indent=1)
     top = sorted(results, key=lambda r: -(r["average"] + r["last"]))[:8]
     log("top 8 on validation:\n" + "\n".join(json.dumps(r) for r in top))
-
-
-EXTRA = Path("D:/xtail_data/features/vitb16_extra")
-
-
-def l2(x):
-    return x / (np.linalg.norm(x, axis=-1, keepdims=True) + 1e-8)
-
-
-def load_with_extra(prompts):
-    data = xp.load_features()
-    if prompts == "ensemble":
-        xp.ensemble_text(data)
-    for n, d in data.items():
-        z = np.load(EXTRA / f"{n}.npz")
-        d.update({k: z[k] for k in z.files})
-    return data
-
-
-def blocks_feature(blocks, flip_train=False, flip_test=False):
-    """Concatenation of unit-normalized blocks (rescaled to unit length). With flips, a block that has a
-    flipped counterpart is replaced by the normalized mean of original and flipped features."""
-    def f(d, split, idx=None):
-        out = []
-        for b in blocks:
-            x = d[f"{split}_{b}"]
-            use_flip = (flip_train if split == "train" else flip_test) and f"{split}_flip_{b}" in d
-            if use_flip:
-                x = l2(x) + l2(d[f"{split}_flip_{b}"])
-            out.append(l2(x if idx is None else x[idx]))
-        return (np.concatenate(out, 1) / np.sqrt(len(out))).astype(np.float32)
-    return f
 
 
 def stage2():
@@ -113,9 +82,9 @@ def stage2():
         slices = [(int(edges[i]), int(edges[i + 1])) for i in range(len(dims))]
 
         def make():
-            m = (xp.SumKernelDual(slices, gamma=gamma, lam=1e-3) if sum_kernel
+            m = (xv.SumKernelDual(slices, gamma=gamma, lam=1e-3) if sum_kernel
                  else xp.DualRAIL(gamma=gamma, lam=1e-3, dtype=torch.float32))
-            return m if T is None else xp.Calibrated(m, T)
+            return m if T is None else xv.Calibrated(m, T)
         evaluate(data, zs, make, feat, tag, results)
         json.dump(results, open(OUT / "improve_stage2_val.json", "w"), indent=1)
 

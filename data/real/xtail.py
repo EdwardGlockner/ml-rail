@@ -2,18 +2,22 @@
 
 Domains in X-TAIL order I (alphabetical), CoOp train/val/test splits (`split_zhou_*.json`), class names
 as RAIL builds them (label order from the split files; FGVC-Aircraft from variants.txt; MNIST as
-'number: "0 - zero"' etc.). Data built by `scripts/setup_xtail_data.py` under D:/xtail_data/datasets.
+'number: "0 - zero"' etc.). Data built by `scripts/setup_xtail_data.py` under `$XTAIL_ROOT/datasets`.
 """
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
 from PIL import Image
 
-ROOT = Path("D:/xtail_data/datasets")
+# All data, features and caches live under XTAIL_ROOT (default: xtail_data/ in the repository).
+XTAIL_ROOT = Path(os.environ.get("XTAIL_ROOT", Path(__file__).resolve().parents[2] / "xtail_data"))
+FEATURES = XTAIL_ROOT / "features"
+ROOT = XTAIL_ROOT / "datasets"
 DOMAINS = ("aircraft", "caltech101", "dtd", "eurosat", "oxford_flowers", "food101", "mnist",
            "oxford_pets", "stanford_cars", "sun397")
 _COOP = {  # domain -> (folder, split file, image root)
@@ -85,7 +89,7 @@ def _mnist() -> Domain:
     return Domain("mnist", classnames, items, mnist={"train": tr, "val": tr, "test": te})
 
 
-CIFAR_ROOT = Path(__file__).resolve().parents[2] / "data" / "generated" / "cifar100_raw"
+CIFAR_ROOT = ROOT / "cifar100"  # built by scripts/setup_xtail_data.py (step "cifar100")
 
 
 def _cifar100() -> Domain:

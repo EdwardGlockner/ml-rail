@@ -26,13 +26,14 @@ import torch  # noqa: E402
 from torch.utils.data import DataLoader, Dataset  # noqa: E402
 
 from data.real.xtail import DOMAINS, clip_preprocess, load_domain  # noqa: E402
+from data.real.xtail import XTAIL_ROOT  # noqa: E402
 
-OUT = Path("D:/xtail_data/features/vitb16")
+OUT = (XTAIL_ROOT / "features/vitb16")
 MODEL = "openai/clip-vit-base-patch16"
 LAYERS = (4, 6, 8, 10)
 CAP = {"train": 80, "val": 10, "test": None}
 PROMPT = "a photo of a {}."
-# 4 logical CPUs; "gentle mode" (XTAIL_WORKERS=1) keeps the machine usable while encoding
+# 4 logical CPUs; XTAIL_WORKERS=1 keeps the machine usable while encoding
 WORKERS = int(__import__("os").environ.get("XTAIL_WORKERS", 3))
 
 

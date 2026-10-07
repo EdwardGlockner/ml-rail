@@ -24,9 +24,10 @@ import torch  # noqa: E402
 from torch.utils.data import DataLoader  # noqa: E402
 
 from data.real.xtail import DOMAINS, load_domain  # noqa: E402
+from data.real.xtail import XTAIL_ROOT  # noqa: E402
 from scripts.xtail_encode import MODEL, OUT as FEAT_DIR, WORKERS, Images  # noqa: E402
 
-OUT = Path("D:/xtail_data/features/vitb16_extra")
+OUT = (XTAIL_ROOT / "features/vitb16_extra")
 
 
 def log(msg):

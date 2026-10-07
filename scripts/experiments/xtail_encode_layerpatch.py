@@ -1,10 +1,10 @@
 """Spatial readout, phase 2 (a): pooled intermediate-layer patch tokens
 for the fine-grained X-TAIL domains -- mean and GeM (p = 3, of the non-negative part) of the
 post-layernorm patch tokens at layers 8 and 10, on exactly the images cached by
-`scripts/xtail_encode_patches.py`.
+`scripts/experiments/xtail_encode_patches.py`.
 
 Usage:
-    python scripts/xtail_encode_layerpatch.py
+    python scripts/experiments/xtail_encode_layerpatch.py
 """
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ import sys
 import time
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
@@ -21,10 +21,11 @@ import torch  # noqa: E402
 from torch.utils.data import DataLoader  # noqa: E402
 
 from data.real.xtail import load_domain  # noqa: E402
+from data.real.xtail import XTAIL_ROOT  # noqa: E402
 from scripts.xtail_encode import MODEL, Images  # noqa: E402
-from scripts.xtail_encode_patches import FINE, OUT as PATCH_DIR  # noqa: E402
+from scripts.experiments.xtail_encode_patches import FINE, OUT as PATCH_DIR  # noqa: E402
 
-OUT = Path("D:/xtail_data/features/vitb16_layerpatch")
+OUT = (XTAIL_ROOT / "features/vitb16_layerpatch")
 LAYERS = (8, 10)
 
 
