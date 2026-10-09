@@ -179,6 +179,19 @@ def test_rescue_gate_threshold_is_the_quantile_of_nearest_neighbour_similarities
     assert np.isclose(gate.tau[0], np.quantile(K.max(1), 0.25), atol=1e-5)
 
 
+def test_reverse_gate_keeps_last_and_only_predicts_unlearned_classes_for_taken_back_images():
+    data = _toy_data()
+    base = xp.run_stream(data, xp.DualRAIL(), seed=0, gate=xp.DomainThresholdGate(0.25, 0.1))
+    gate = xp.DomainThresholdGate(0.25, 0.1, reverse_q=1.0)  # takes back every admitted image before the end
+    rev = xp.run_stream(data, xp.DualRAIL(), seed=0, gate=gate)
+    assert np.allclose(rev[-1], base[-1])
+    method = xp.DualRAIL()
+    method.add(data["d0"]["train_global"], data["d0"]["train_labels"])
+    p = torch.softmax(100 * torch.as_tensor(data["d1"]["test_global"] @ np.concatenate([data[n]["text"] for n in data]).T), 1)
+    mask = gate(method, data["d1"]["test_global"], p, learned=4, domains=[(0, 4)])
+    assert not mask.any() and torch.equal(gate.last_taken_back, p.argmax(1) < 4)
+
+
 def test_unseen_domains_training_data_never_affects_earlier_rows():
     """Row t of the table may only depend on the training data of domains 0..t."""
     gates = (lambda: "rail", lambda: xp.DomainThresholdGate(0.25, 0.1))

@@ -20,11 +20,11 @@ from data.real.xtail import DOMAINS, XTAIL_ROOT
 
 FEATS = (XTAIL_ROOT / "features/vitb16")
 DEV = "cuda" if torch.cuda.is_available() else "cpu"
-# "Gentle mode": cap this process's share of GPU memory (e.g. XTAIL_GPU_FRACTION=0.6) so the
+# Low-load settings: cap this process's share of GPU memory (e.g. XTAIL_GPU_FRACTION=0.6) so the
 # machine stays usable; unset = no cap.
 if DEV == "cuda" and os.environ.get("XTAIL_GPU_FRACTION"):
     torch.cuda.set_per_process_memory_fraction(float(os.environ["XTAIL_GPU_FRACTION"]))
-# Gentle mode, continued: XTAIL_SOLVE=cpu moves kernel-ridge solves to the CPU (2 threads), so the GPU
+# XTAIL_SOLVE=cpu moves kernel-ridge solves to the CPU (2 threads), so the GPU
 # only builds kernel chunks (needed when other programs hold GPU memory).
 SOLVE_ON_CPU = os.environ.get("XTAIL_SOLVE") == "cpu"
 if SOLVE_ON_CPU:
@@ -117,6 +117,7 @@ def run_stream(data, method, seed, feat="global", fusion_weight=0.8, shots=16, z
                 mask = torch.full_like(top1, j <= t, dtype=torch.bool)
             else:
                 raise ValueError(f"unknown gate: {gate!r}")
+            back = getattr(gate, "last_taken_back", None) if callable(gate) else None
             pad = None
             if mask.any():
                 s = torch.as_tensor(method.scores(getf(e, split)[mask.numpy()]), dtype=torch.float32)
@@ -133,6 +134,8 @@ def run_stream(data, method, seed, feat="global", fusion_weight=0.8, shots=16, z
                     else:
                         wv = w
                     p[mask] = (1 - wv) * p[mask] + wv * pad
+                if back is not None and back.any():  # predicted among the classes not yet learned
+                    p[back, :learned] = -1.0
                 if route and mask.any():  # Restrict admitted images to one learned domain
                     dom = torch.as_tensor(cls_dom[zs[m][mask][:, :learned].argmax(1).numpy()])
                     keep = dom[:, None] == torch.as_tensor(cls_dom)[None, :]
@@ -252,39 +255,66 @@ class DomainThresholdGate:
     the q-quantile of the nearest-neighbour similarities among d's own training images (each image
     against the others; exact duplicates from with-replacement sampling excluded). This is an empirical
     per-domain threshold; it carries no coverage guarantee.
+
+    With `reverse_q`, the gate also takes images back: an admitted image whose similarity to every
+    learned domain d is below the reverse_q-quantile of d's nearest-neighbour similarities is not
+    admitted, and run_stream predicts it among the classes not yet learned (`last_taken_back`).
     Needs a method with stored features X, labels y and a kernel _k (DualRAIL)."""
 
-    def __init__(self, q, min_mass=0.0, strip=0):
+    def __init__(self, q, min_mass=0.0, strip=0, reverse_q=None):
         """strip: number of trailing non-feature columns in the test features (image ids)."""
-        self.q, self.min_mass, self.strip, self.tau, self._owner = q, min_mass, strip, {}, None
+        self.q, self.min_mass, self.strip, self.reverse_q = q, min_mass, strip, reverse_q
+        self.nn, self._owner = {}, None
 
     def _rows(self, method, off, n):
         y = torch.as_tensor(method.y, device=method.X.device)
         return method.X[(y >= off) & (y < off + n)]
 
+    def _nn(self, method, off, Xd):
+        if off not in self.nn:
+            nn = []
+            for i in range(0, len(Xd), 2048):
+                K = method._k(Xd[i : i + 2048], Xd)
+                K[K >= 1 - 1e-6] = -1  # self and exact duplicates
+                nn.append(K.max(1).values.cpu())
+            self.nn[off] = torch.cat(nn)
+        return self.nn[off]
+
+    @property
+    def tau(self):
+        return {off: float(torch.quantile(s, self.q)) for off, s in self.nn.items()}
+
+    def _max_sim(self, method, Xq, Xd):
+        if len(Xq) == 0:
+            return torch.zeros(0)
+        return torch.cat([method._k(Xq[i : i + 2048], Xd).max(1).values.cpu() for i in range(0, len(Xq), 2048)])
+
     def __call__(self, method, X, p, learned, domains):
         if self._owner is not method:  # thresholds belong to one model's stored features
-            self.tau, self._owner = {}, method
+            self.nn, self._owner = {}, method
         mask = p.argmax(1) < learned
         rej = (~mask) & (p[:, :learned].sum(1) >= self.min_mass)
         self.last_rescued = torch.zeros_like(mask)  # Which admitted images were rescued
-        if not rej.any():
-            return mask
+        self.last_taken_back = torch.zeros_like(mask)
         X = X[:, : X.shape[1] - self.strip] if self.strip else X
-        Xr = torch.as_tensor(X[rej.numpy()], dtype=torch.float32, device=DEV)
-        ok = torch.zeros(len(Xr), dtype=torch.bool)
+        Xt = torch.as_tensor(X, dtype=torch.float32, device=DEV)
+        take_back = self.reverse_q is not None and learned < p.shape[1]  # nothing to take back to at the end
+        far = torch.ones(len(X), dtype=torch.bool)
+        ok = torch.zeros(int(rej.sum()), dtype=torch.bool)
         for off, n in domains:
             Xd = self._rows(method, off, n)
-            if off not in self.tau:
-                nn = []
-                for i in range(0, len(Xd), 2048):
-                    K = method._k(Xd[i : i + 2048], Xd)
-                    K[K >= 1 - 1e-6] = -1  # self and exact duplicates
-                    nn.append(K.max(1).values.cpu())
-                self.tau[off] = float(torch.quantile(torch.cat(nn), self.q))
-            s = torch.cat([method._k(Xr[i : i + 2048], Xd).max(1).values.cpu() for i in range(0, len(Xr), 2048)])
-            ok |= s >= self.tau[off]
+            nn = self._nn(method, off, Xd)
+            if rej.any():
+                ok |= self._max_sim(method, Xt[rej.to(Xt.device)], Xd) >= float(torch.quantile(nn, self.q))
+            if take_back:
+                adm = mask | rej
+                s = torch.full((len(X),), float("inf"))
+                s[adm] = self._max_sim(method, Xt[adm.to(Xt.device)], Xd)
+                far &= s < float(torch.quantile(nn, self.reverse_q))
         mask = mask.clone()
         mask[rej] = ok
         self.last_rescued[rej] = ok
+        if take_back:
+            self.last_taken_back = mask & far
+            mask = mask & ~far
         return mask

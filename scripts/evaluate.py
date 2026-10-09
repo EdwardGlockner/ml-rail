@@ -1,12 +1,14 @@
-"""Final evaluation on held-out seeds that no selection step has used (default seeds 6-10).
+"""Final evaluation on held-out seeds that no selection step has used.
 
-Runs zero-shot CLIP, Dual-RAIL, ML-RAIL and ML-RAIL with the rescue gate in all three X-TAIL settings,
-with every setting frozen: Dual-RAIL uses RAIL's published hyperparameters; ML-RAIL and the gate use
-the values selected on validation (see README, "How the result was reached"). Results are cached per run in
+Runs zero-shot CLIP, Dual-RAIL, ML-RAIL, ML-RAIL with the rescue gate, and ML-RAIL with the rescue and
+reverse gates in all three X-TAIL settings, with every setting frozen: Dual-RAIL uses RAIL's published
+hyperparameters; ML-RAIL and the gates use the values selected on validation (see README, "How the
+result was reached"). The reported numbers are seeds 11-15; seeds 6-10 are an earlier held-out run
+without the reverse gate (`--seeds 6,7,8,9,10 --methods zero_shot,rail_dual,ml_rail,ml_rail_gate`). Results are cached per run in
 $XTAIL_ROOT/results/evaluate.json, so the script can be stopped and restarted.
 
 Usage:
-    python scripts/evaluate.py                       # all settings, seeds 6-10
+    python scripts/evaluate.py                       # all settings and methods, seeds 11-15
     python scripts/evaluate.py --seeds 6 --float64   # precision check on one seed
 """
 from __future__ import annotations
@@ -29,6 +31,7 @@ from evaluation.ml_rail import BLOCKS, blocks_feature, load_with_extra  # noqa: 
 
 SETTINGS = {"order_I": (DOMAINS, 16), "order_II": (ORDER_II, 16), "11_domains_5shot": (DOMAINS_11, 5)}
 GATE_Q, GATE_MIN_MASS = 0.25, 0.1  # rescue-gate settings selected on validation
+REVERSE_Q = 0.01  # reverse gate, selected on validation (largest q with no loss in Average)
 
 
 def log(msg):
@@ -44,14 +47,16 @@ def methods(dtype):
         "ml_rail": (lambda: xp.DualRAIL(gamma=0.2, lam=1e-3, dtype=dtype), ml_feat, lambda: "rail"),
         "ml_rail_gate": (lambda: xp.DualRAIL(gamma=0.2, lam=1e-3, dtype=dtype), ml_feat,
                          lambda: xp.DomainThresholdGate(GATE_Q, GATE_MIN_MASS)),
+        "ml_rail_gate_reverse": (lambda: xp.DualRAIL(gamma=0.2, lam=1e-3, dtype=dtype), ml_feat,
+                                 lambda: xp.DomainThresholdGate(GATE_Q, GATE_MIN_MASS, reverse_q=REVERSE_Q)),
     }
 
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--seeds", default="6,7,8,9,10")
+    p.add_argument("--seeds", default="11,12,13,14,15")
     p.add_argument("--settings", default=",".join(SETTINGS))
-    p.add_argument("--methods", default="zero_shot,rail_dual,ml_rail,ml_rail_gate")
+    p.add_argument("--methods", default="zero_shot,rail_dual,ml_rail,ml_rail_gate,ml_rail_gate_reverse")
     p.add_argument("--float64", action="store_true", help="float64 kernel solves (default float32)")
     a = p.parse_args()
     dtype = torch.float64 if a.float64 else torch.float32

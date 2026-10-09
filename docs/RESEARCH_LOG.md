@@ -115,7 +115,38 @@ classified among ~1,100 class names with no domain label.
   set on the first domain too falls back to RAIL's final embedding, and the gain over RAIL nearly
   disappears (+0.18 Average, -0.43 Last). Both are reported.
 
-Final result (order I, held-out seeds 6-10): **61.42 / 73.55 / 84.48**, against 61.55 / 71.62 / 82.81 for
+Result at this point (order I, held-out seeds 6-10): 61.42 / 73.55 / 84.48, against 61.55 / 71.62 /
+82.81 for Dual-RAIL in the same harness.
+
+## Phase 6 -- Transfer, and the reverse gate
+
+Transfer had been written off as "zero-shot CLIP by construction" for every RAIL-style method. It isn't
+quite: zero-shot CLIP also loses accuracy on unseen domains by confusing their images with classes that
+are already learned, and RAIL's gate then sends those images to an adapter that can only name learned
+classes.
+
+- **Measure first.** About 4-5% of unseen-domain images were admitted, and all of them were wrong. An
+  oracle that takes exactly those images back, and predicts zero-shot's best not-yet-learned class,
+  would add +1.9 Transfer on order I (+1.7 order II, +2.5 at 5 shots). The bar set before the
+  measurement was +0.5, so the idea went ahead.
+- **The reverse gate** reuses the rescue gate's per-domain statistics. An admitted image is taken back
+  if its similarity to every learned domain is below a low percentile of that domain's own
+  nearest-neighbour similarities. The percentile was chosen on validation as the loosest that did not
+  lower Average (the 1st). Looser thresholds take more Transfer back, but start taking back
+  learned-domain images: Average falls by 0.6 at the 5th percentile and 1.9 at the 10th.
+- **Development seeds 1-5** passed the rule in all three settings (mean ΔTransfer +0.68 / +0.53 /
+  +0.63, ΔAverage +0.13 / +0.15 / +0.00).
+- **Literature check.** LADA (ICML 2025) already reports that learned knowledge can lift Transfer by
+  separating learned from unseen classes, using trained modules. The reverse gate is a training-free,
+  explicit version inside RAIL's fusion, so it is reported as an extension of the gate.
+- **Final run on fresh seeds 11-15,** for every method at once. The reverse gate passed again:
+  ΔTransfer +0.73 / +0.52 / +0.64 over the rescue gate alone, ΔAverage +0.09 / +0.11 / +0.00, Last
+  unchanged. Transfer is now above zero-shot CLIP's in all three settings.
+- **And one more fail.** On the same seeds, the rescue gate alone cost -0.234 Transfer at 5 shots, so
+  it fails its tolerance on two of its three seed sets (-0.214, -0.164, -0.234). The combined method
+  does not have the problem, but the rescue gate on its own is not reliable at 5 shots.
+
+Final result (order I, held-out seeds 11-15): **62.16 / 73.61 / 84.52**, against 61.55 / 71.63 / 82.84 for
 Dual-RAIL in the same harness and best published 63.3 / 72.7 / 83.1 (other code).
 
 ## Lessons
@@ -127,3 +158,4 @@ Dual-RAIL in the same harness and best published 63.3 / 72.7 / 83.1 (other code)
 - Test on held-out domains, not just held-out images, and keep the final test seeds out of every
   selection loop.
 - Record narrow misses as misses.
+- Ask where a metric is lost before accepting that it is fixed "by construction".
