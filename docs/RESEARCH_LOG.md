@@ -146,6 +146,16 @@ classes.
   it fails its tolerance on two of its three seed sets (-0.214, -0.164, -0.234). The combined method
   does not have the problem, but the rescue gate on its own is not reliable at 5 shots.
 
+- **Under RAIL's tuning protocol** (seeds 6-10): with the five blocks kept and only γ and λ chosen on
+  the first domain, the reverse gate adds +0.81 Transfer, as before. With the feature set also chosen
+  there, the wide kernel it brings breaks both gates (the reverse gate wins back 0.16 of the rescue
+  gate's 1-point Transfer cost).
+- **A better take-back signal?** Rules adding zero-shot CLIP's mass or probability ratio on the
+  not-yet-learned classes, or a logistic score over these and the adapter's confidence, were selected on
+  validation and checked on seeds 1-5. None beat the plain similarity threshold. Each bought a little
+  more Transfer with Average, and at equal Average cost the plain threshold was as good or better. The
+  oracle still sits at +1.9; the signals tried cannot find it.
+
 Final result (order I, held-out seeds 11-15): **62.16 / 73.61 / 84.52**, against 61.55 / 71.63 / 82.84 for
 Dual-RAIL in the same harness and best published 63.3 / 72.7 / 83.1 (other code).
 

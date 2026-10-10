@@ -28,11 +28,11 @@ Last is unchanged by both gates.
 Two qualifications:
 
 1. **Tuning protocol.** The hyperparameters were chosen on validation data from all ten domains; RAIL tunes
-   on the first domain only. This check was run on seeds 6–10, before the reverse gate existed.
-   - Under RAIL's protocol with the five feature blocks kept, ML-RAIL + rescue gate gives 61.43 / 72.86 /
-     83.13. That is +1.25 Average and +0.33 Last over RAIL, instead of +1.93 / +1.67.
+   on the first domain only (check on seeds 6–10).
+   - Under RAIL's protocol with the five feature blocks kept, the full method gives 62.24 / 72.96 / 83.13.
+     That is +0.69 Transfer, +1.34 Average and +0.32 Last over RAIL, instead of +0.60 / +2.03 / +1.67.
    - Under RAIL's full protocol, with the feature set also chosen on the first domain, the selection falls
-     back to RAIL's final embedding and the gain nearly disappears: +0.18 Average and −0.43 Last.
+     back to RAIL's final embedding with a wide kernel, and the gain is gone: −0.82 / +0.06 / −0.43.
 2. **Development history.**
    - The rescue gate's rule was revised once after a failed 5-shot result, and one test seed (seed 1) was
      used during its selection. It was therefore rerun once on fresh seeds 6–10.
@@ -193,17 +193,23 @@ from +0.69 to +0.92 and ΔTransfer from −0.09 to −0.21. The chosen point (0.
 | RAIL's published setting | final embedding, 0.1, 1e−3 | 61.55 | 71.62 | 82.81 |
 | All domains' validation | five blocks, 0.2, 1e−3 | 61.55 | 72.64 | 84.48 |
 | + rescue gate | | 61.42 | 73.55 | 84.48 |
+| + rescue and reverse gates | | 62.15 | 73.65 | 84.48 |
 | First domain's validation | final embedding, 0.8, 0.1 | 61.55 | 71.43 | 82.38 |
 | + rescue gate | | 60.57 | 71.80 | 82.38 |
+| + rescue and reverse gates | | 60.73 | 71.68 | 82.38 |
 | First domain, five blocks kept | five blocks, 0.8, 0.1 | 61.55 | 71.97 | 83.13 |
 | + rescue gate | | 61.43 | 72.86 | 83.13 |
+| + rescue and reverse gates | | 62.24 | 72.96 | 83.13 |
 
 - Selection is by validation regression error on Aircraft, as in RAIL. All three feature sets come within
   4% of each other there, so choosing the feature set from one domain is nearly arbitrary.
-- The rescue gate's settings stay at the all-domain values in every row. Measuring their Transfer cost
+- The gates' settings stay at the all-domain values in every row. Measuring their effect on Transfer
   needs domains not yet learned, so they cannot be chosen from the first domain alone.
-- With the wide kernel on the final embedding, the rescue gate costs a full Transfer point.
-- The reverse gate was not part of this check.
+- With the wide kernel on the final embedding, the rescue gate costs a full Transfer point and the
+  reverse gate wins back only 0.16 of it. Similarities under a wide kernel separate domains poorly.
+- With the five blocks kept, the reverse gate adds +0.81 Transfer, as much as under all-domain tuning.
+- The all-domain row with both gates (62.15 / 73.65 / 84.48 on seeds 6–10) replicates the final run on
+  seeds 11–15 (62.16 / 73.61 / 84.52).
 
 ## What did not work
 
@@ -221,6 +227,14 @@ from +0.69 to +0.92 and ΔTransfer from −0.09 to −0.21. The chosen point (0.
   dual model, which missed its tolerance.
 - **Looser reverse thresholds:** above the 1st percentile, the reverse gate starts taking back
   learned-domain images, and Average falls (see the table above).
+- **Other take-back signals** (`run_xtail_takeback_signals.py`, development seeds 1–5, order I). Rules
+  were tried that add zero-shot CLIP's mass on not-yet-learned classes, the ratio of its best
+  not-yet-learned to best learned probability, or a logistic score over these and the adapter's top
+  score. Each was selected on validation as the reverse gate was. None met the bar set beforehand (+0.2
+  Transfer over the reverse gate with no loss in Average): each gained +0.06 to +0.28 Transfer but lost
+  0.07 to 0.19 Average. Even selected on the development seeds themselves, the best rule with no loss in
+  Average reaches +0.87 Transfer with the plain similarity threshold and at most +0.86 with the other
+  signals. The zero-shot and adapter signals do not separate the images worth taking back.
 
 ## Position relative to prior work
 
@@ -251,8 +265,8 @@ from +0.69 to +0.92 and ΔTransfer from −0.09 to −0.21. The chosen point (0.
 ## Limitations
 
 - One backbone (CLIP ViT-B/16) and one benchmark family (X-TAIL and its variants).
-- The gain over RAIL depends on tuning with all domains' validation data. Under RAIL's protocol it is
-  smaller (table above), and that check predates the reverse gate.
+- The gain over RAIL depends on tuning with all domains' validation data. Under RAIL's protocol with the
+  five blocks kept it is smaller, and under RAIL's full protocol it is gone (table above).
 - Transfer stays below MoRAM's 63.3, although the comparison crosses harnesses.
 - The dual adapter stores all training features, as Dual-RAIL does. The fixed-memory variant missed its
   tolerance.
@@ -261,9 +275,10 @@ from +0.69 to +0.92 and ΔTransfer from −0.09 to −0.21. The chosen point (0.
 
 ## Future work
 
-- **More Transfer:** a take-back signal that also uses the zero-shot distribution, to recover more of the
-  oracle without taking back learned-domain images. Beyond the oracle, Transfer is CLIP's own error on
-  unseen classes. A learned prior from past domains tied but did not beat CLIP's text embeddings.
+- **More Transfer:** the zero-shot distribution and the adapter's confidence did not improve the take-back
+  rule, so reaching more of the oracle needs a different signal. Beyond the oracle, Transfer is CLIP's own
+  error on unseen classes. A learned prior from past domains tied but did not beat CLIP's text
+  embeddings.
 - **Thresholds with few shots:** shrink per-domain thresholds toward a pooled estimate.
 - **First-domain tuning:** a selection criterion that is less noisy than regression error on one domain.
 - **Other backbones** (CLIP ViT-L/14, SigLIP) and **longer domain streams** with the fixed-memory adapter.

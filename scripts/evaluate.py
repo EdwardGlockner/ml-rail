@@ -3,8 +3,9 @@
 Runs zero-shot CLIP, Dual-RAIL, ML-RAIL, ML-RAIL with the rescue gate, and ML-RAIL with the rescue and
 reverse gates in all three X-TAIL settings, with every setting frozen: Dual-RAIL uses RAIL's published
 hyperparameters; ML-RAIL and the gates use the values selected on validation (see README, "How the
-result was reached"). The reported numbers are seeds 11-15; seeds 6-10 are an earlier held-out run
-without the reverse gate (`--seeds 6,7,8,9,10 --methods zero_shot,rail_dual,ml_rail,ml_rail_gate`). Results are cached per run in
+result was reached"). The reported numbers are seeds 11-15. Seeds 6-10 are an earlier held-out run
+made before the reverse gate (`--seeds 6,7,8,9,10 --methods zero_shot,rail_dual,ml_rail,ml_rail_gate`),
+later extended with both gates on order I for the tuning-protocol table. Results are cached per run in
 $XTAIL_ROOT/results/evaluate.json, so the script can be stopped and restarted.
 
 Usage:

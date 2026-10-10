@@ -24,9 +24,9 @@ from the spread of its own training images.
 Two caveats matter for reading the numbers:
 
 - The hyperparameters were chosen on validation data from all ten domains; RAIL chooses its own on the
-  first domain only. Under RAIL's full protocol, with the feature set, γ and λ all chosen on the first
-  domain, ML-RAIL + rescue gate gains only +0.18 Average and −0.43 Last over RAIL. Keeping the five feature
-  blocks and choosing only γ and λ on the first domain gives +1.25 / +0.33 (Table 3).
+  first domain only. Keeping the five feature blocks and choosing only γ and λ on the first domain, the full
+  method still gains +0.69 Transfer, +1.34 Average and +0.32 Last over RAIL. Under RAIL's full protocol,
+  with the feature set chosen on the first domain too, the gain is gone: −0.82 / +0.06 / −0.43 (Table 3).
 - The rescue gate alone costs Transfer, and at 5 shots it misses its own 0.2-point tolerance (−0.23 on the
   final seeds). The reverse gate more than recovers that cost in every setting.
 
@@ -64,14 +64,17 @@ held-out run of everything except the reverse gate, give the same numbers to wit
 ### Effect of the tuning protocol
 
 <p align="center"><img src="docs/figures/xtail_table_tuning.png" width="96%"></p>
-<p align="center"><sub><b>Table 3.</b> ML-RAIL with hyperparameters chosen on all domains' validation data (as above) or on the first domain's only (RAIL's protocol, by validation regression error). Order I, seeds 6–10; this check was run before the reverse gate existed. The rescue gate's two settings stay at the values chosen on all domains, because measuring their Transfer cost needs domains not yet learned.</sub></p>
+<p align="center"><sub><b>Table 3.</b> ML-RAIL with hyperparameters chosen on all domains' validation data (as above) or on the first domain's only (RAIL's protocol, by validation regression error). Order I, seeds 6–10. The gates' settings stay at the values chosen on all domains, because measuring their effect on Transfer needs domains not yet learned.</sub></p>
 
 - Selecting the feature set on the first domain alone picks RAIL's final embedding with a wider kernel. That
   is *worse* than RAIL's published setting. The validation errors of all three feature sets are within 4%
-  of each other on that one domain, so the selection is close to noise. The rescue gate also costs a full
-  Transfer point with this kernel, because the wider kernel makes the thresholds less selective.
+  of each other on that one domain, so the selection is close to noise.
+- With that wide kernel the gates fail too. The rescue gate costs a full Transfer point, and the reverse
+  gate wins back only 0.16 of it. Similarities under a wide kernel separate domains poorly, so the gates
+  depend on a kernel width suited to the multi-layer features.
 - With ML-RAIL's five blocks kept and only γ and λ chosen on the first domain, ML-RAIL gains +0.35 Average
-  and +0.3 Last over RAIL. The rescue gate's gain on top of it is unchanged (+0.9).
+  and +0.3 Last over RAIL. The gates work as before on top of it: +0.9 Average from the rescue gate and
+  +0.81 Transfer from the reverse gate.
 
 ## Method
 
@@ -187,8 +190,8 @@ back learned-domain images, and Average then drops: −0.6 at the 5th percentile
 ## Limitations
 
 - One backbone (CLIP ViT-B/16) and one benchmark family.
-- The headline gain depends on tuning with all domains' validation data (Table 3), and that check predates
-  the reverse gate.
+- The headline gain depends on tuning with all domains' validation data (Table 3). Under RAIL's full
+  first-domain protocol it disappears.
 - The rescue gate alone is unreliable at 5 shots; the combined method is not.
 - The dual adapter stores all training features, as RAIL's does. A fixed-memory version with random
   features comes within 0.3 Average and 0.5 Last.
@@ -197,9 +200,11 @@ back learned-domain images, and Average then drops: −0.6 at the 5th percentile
 
 ## Future work
 
-- **More Transfer.** The reverse gate stops at the point where it starts taking back learned-domain images.
-  A better signal than nearest-neighbour similarity, for example one that also uses the zero-shot
-  distribution, could recover more of the +1.9 ceiling. Beyond that ceiling, Transfer is CLIP's own error
+- **More Transfer.** The reverse gate stops at the point where it starts taking back learned-domain images,
+  well short of the +1.9 ceiling. Adding the zero-shot distribution or the adapter's confidence to the
+  take-back rule did not help: neither these signals nor a logistic score over them beat the plain
+  similarity threshold at equal Average cost (`run_xtail_takeback_signals.py`). Reaching more of the
+  ceiling needs a signal not yet available to the method. Beyond the ceiling, Transfer is CLIP's own error
   on unseen classes. A prior learned from past domains, tried earlier, only tied CLIP's own class-name
   embeddings ([research log](docs/RESEARCH_LOG.md)).
 - **Thresholds with few shots.** Shrinking per-domain thresholds toward a pooled estimate may reduce the
@@ -235,7 +240,7 @@ python scripts/reproduce.py --from evaluate  # once the data and features are ca
 | Cache CLIP ViT-B/16 features, then the intermediate layers | `scripts/xtail_encode.py`, `scripts/xtail_encode_extra.py` |
 | Tables 1–2 on seeds 11–15, and the seeds 6–10 replication | `scripts/evaluate.py` |
 | Table 3 and the rescue gate's checks | `scripts/experiments/run_xtail_first_domain_tuning.py`, `run_xtail_gate_sensitivity.py` |
-| Reverse gate: headroom and development runs | `scripts/experiments/run_xtail_transfer_headroom.py` |
+| Reverse gate: headroom, development runs and take-back signals | `scripts/experiments/run_xtail_transfer_headroom.py`, `run_xtail_takeback_signals.py` |
 | Figures, tables, `results/xtail_results.json` | `scripts/plot_xtail_figures.py` |
 
 The per-seed metrics and accuracy tables behind Tables 1–3 are in
@@ -266,6 +271,7 @@ rescue gate (at $m = 0.05$ in `xtail_lora.py`), and `C0`, `A1`, … name variant
 | Signals for gating and the split-domain check | `run_xtail_gatesep.py`, `run_xtail_gatesep_explore.py` |
 | Rescue gate selection on development seeds | `../run_xtail_routegate.py` |
 | Transfer headroom and the reverse gate | `run_xtail_transfer_headroom.py` |
+| Other take-back signals (zero-shot mass and ratio, logistic score) | `run_xtail_takeback_signals.py` |
 | Gate-free residual model | `run_xtail_residual.py` |
 | Spatial readouts for fine-grained domains | `run_xtail_spatial.py`, `xtail_encode_patches.py`, `xtail_encode_layerpatch.py`, `xtail_encode_tiles.py` |
 | Fixed-memory adapter (random features) | `run_xtail_bounded.py` |

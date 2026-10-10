@@ -3,8 +3,9 @@ the first domain's validation split only (RAIL: "minimizing the regression error
 the first domain, without access to future domains"), then evaluated on the held-out seeds 6-10. Two
 selections: over all block sets, and gamma and lambda only, with ML-RAIL's five blocks fixed.
 
-The rescue gate's two settings cannot be tuned this way (measuring its cost needs domains not yet
-learned), so the gate rows use the settings selected on all domains' validation data; see the README.
+The gates' settings cannot be tuned this way (measuring their effect on Transfer needs domains not yet
+learned), so the gate rows (rescue gate; rescue and reverse gates) use the settings selected on all
+domains' validation data; see the README.
 
 Usage:
     python scripts/experiments/run_xtail_first_domain_tuning.py
@@ -69,7 +70,8 @@ def main():
     for prefix, sel in (("ml_rail_first_domain", best), ("ml_rail_blocks_first_domain_params", best_blocks)):
         feat = blocks_feature(BLOCK_SETS[sel["blocks"]])
         for seed in TEST_SEEDS:
-            for gname, gate in ((prefix, lambda: "rail"), (prefix + "_gate", lambda: xp.DomainThresholdGate(0.25, 0.1))):
+            for gname, gate in ((prefix, lambda: "rail"), (prefix + "_gate", lambda: xp.DomainThresholdGate(0.25, 0.1)),
+                                (prefix + "_gate_reverse", lambda: xp.DomainThresholdGate(0.25, 0.1, reverse_q=0.01))):
                 if any(r["method"] == gname and r["seed"] == seed for r in results["test"]):
                     continue
                 t0 = time.time()

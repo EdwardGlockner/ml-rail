@@ -6,11 +6,13 @@ Each step caches its output under $XTAIL_ROOT, so an interrupted run continues w
   encode_extra intermediate-layer features                   scripts/xtail_encode_extra.py
   evaluate     Tables 1-2 on the held-out seeds 11-15        scripts/evaluate.py
   replication  the earlier held-out run, seeds 6-10          scripts/evaluate.py --seeds 6,...,10
+  replication_reverse  both gates on seeds 6-10, order I (table 3)
   tuning       Table 3: RAIL's first-domain tuning protocol  scripts/experiments/run_xtail_first_domain_tuning.py
   sensitivity  gate settings and acceptance rates            scripts/experiments/run_xtail_gate_sensitivity.py
   headroom     Transfer headroom and the reverse gate's      scripts/experiments/run_xtail_transfer_headroom.py
   headroom_II  development runs (order I, order II, 5-shot)
   headroom_5shot
+  takeback     other take-back signals (negative result)    scripts/experiments/run_xtail_takeback_signals.py
   plot         figures, tables, results/xtail_results.json   scripts/plot_xtail_figures.py
 
 Usage:
@@ -31,11 +33,13 @@ STEPS = {
     "encode_extra": "scripts/xtail_encode_extra.py",
     "evaluate": "scripts/evaluate.py",
     "replication": "scripts/evaluate.py --seeds 6,7,8,9,10 --methods zero_shot,rail_dual,ml_rail,ml_rail_gate",
+    "replication_reverse": "scripts/evaluate.py --seeds 6,7,8,9,10 --settings order_I --methods ml_rail_gate_reverse",
     "tuning": "scripts/experiments/run_xtail_first_domain_tuning.py",
     "sensitivity": "scripts/experiments/run_xtail_gate_sensitivity.py",
     "headroom": "scripts/experiments/run_xtail_transfer_headroom.py --runs val:100,test:0,test:1,test:2,test:3,test:4,test:5",
     "headroom_II": "scripts/experiments/run_xtail_transfer_headroom.py --setting order_II --runs test:1,test:2,test:3,test:4,test:5",
     "headroom_5shot": "scripts/experiments/run_xtail_transfer_headroom.py --setting 11_domains_5shot --runs test:1,test:2,test:3,test:4,test:5",
+    "takeback": "scripts/experiments/run_xtail_takeback_signals.py --collect --analyze",
     "plot": "scripts/plot_xtail_figures.py",
 }
 

@@ -36,7 +36,7 @@ from data.real.xtail import XTAIL_ROOT  # noqa: E402
 RESULTS = XTAIL_ROOT / "results"
 FIG = REPO_ROOT / "docs" / "figures"
 SEEDS = (11, 12, 13, 14, 15)  # final run, all methods
-REPLICATION_SEEDS = (6, 7, 8, 9, 10)  # earlier held-out run, without the reverse gate; table 3 uses these
+REPLICATION_SEEDS = (6, 7, 8, 9, 10)  # earlier held-out run (reverse gate on order I only); table 3 uses these
 SETTINGS = [("order_I", "Order I, 16-shot"), ("order_II", "Order II, 16-shot"), ("11_domains_5shot", "11 domains, 5-shot")]
 DOMAIN_LABELS = ["Aircraft", "Caltech101", "DTD", "EuroSAT", "Flowers", "Food101", "MNIST", "Pets", "Cars", "SUN397"]
 # Published X-TAIL order I, 16-shot (Transfer, Average, Last), from each paper's main table.
@@ -320,16 +320,18 @@ def tables(ev, ev_rep, tuning):
     header = ["Hyperparameters chosen on", "Features, γ, λ", "Transfer", "Average", "Last", "Δ Avg / Last"]
     base = ev_rep[("order_I", "rail_dual")]  # the first-domain runs were made on seeds 6-10
     sel = tuning["selected"]
+    tuned = lambda m: [r for r in tuning["test"] if r["method"] == m]  # noqa: E731
     spec = [
         ("RAIL's published setting", "final embedding, 0.1, 10⁻³", ev_rep[("order_I", "rail_dual")], False),
         ("all domains' validation", "five blocks, 0.2, 10⁻³", ev_rep[("order_I", "ml_rail")], False),
-        ("  + rescue gate", "", ev_rep[("order_I", "ml_rail_gate")], True),
-        ("first domain's validation", f"final embedding, {sel['gamma']}, {sel['lam']:g}",
-         [r for r in tuning["test"] if r["method"] == "ml_rail_first_domain"], False),
-        ("  + rescue gate", "", [r for r in tuning["test"] if r["method"] == "ml_rail_first_domain_gate"], False),
-        ("first domain, five blocks fixed", "five blocks, 0.8, 0.1",
-         [r for r in tuning["test"] if r["method"] == "ml_rail_blocks_first_domain_params"], False),
-        ("  + rescue gate", "", [r for r in tuning["test"] if r["method"] == "ml_rail_blocks_first_domain_params_gate"], False),
+        ("  + rescue gate", "", ev_rep[("order_I", "ml_rail_gate")], False),
+        ("  + rescue and reverse gates", "", ev_rep.get(("order_I", "ml_rail_gate_reverse"), []), True),
+        ("first domain's validation", f"final embedding, {sel['gamma']}, {sel['lam']:g}", tuned("ml_rail_first_domain"), False),
+        ("  + rescue gate", "", tuned("ml_rail_first_domain_gate"), False),
+        ("  + rescue and reverse gates", "", tuned("ml_rail_first_domain_gate_reverse"), False),
+        ("first domain, five blocks fixed", "five blocks, 0.8, 0.1", tuned("ml_rail_blocks_first_domain_params"), False),
+        ("  + rescue gate", "", tuned("ml_rail_blocks_first_domain_params_gate"), False),
+        ("  + rescue and reverse gates", "", tuned("ml_rail_blocks_first_domain_params_gate_reverse"), False),
     ]
     rows, dec = [], []
     for j, (name, desc, runs, shade) in enumerate(spec):
@@ -338,7 +340,7 @@ def tables(ev, ev_rep, tuning):
         rows.append({"cells": [name, desc] + cells(runs, ("average", "last", "transfer")) + ["" if j == 0 else delta(runs, base)],
                      "shade": shade, "rule_before": name.startswith(("first", "all"))})
         dec.append([0, 0, 2, 2, 2, 0])
-    render_table(FIG / "xtail_table_tuning.png", header, rows, [2.35, 1.95, 1.1, 1.05, 1.05, 1.25], dec)
+    render_table(FIG / "xtail_table_tuning.png", header, rows, [2.6, 1.95, 1.1, 1.05, 1.05, 1.25], dec)
 
 
 def export_results(ev, ev_rep, tuning, sens, headroom):
