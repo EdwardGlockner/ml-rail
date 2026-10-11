@@ -27,7 +27,7 @@ import torch  # noqa: E402
 
 from data.real.xtail import XTAIL_ROOT  # noqa: E402
 from evaluation import xtail_protocol as xp  # noqa: E402
-from evaluation.ml_rail import BLOCKS, blocks_feature, load_with_extra  # noqa: E402
+from evaluation.ml_rail import BLOCKS, SLICES, blocks_feature, load_with_extra  # noqa: E402
 
 BLOCK_SETS = {"global": ("global",), "three_blocks": ("global", "cls10", "patch_mean"), "ml_rail": BLOCKS}
 GAMMAS, LAMS = (0.05, 0.1, 0.2, 0.4, 0.8), (1e-4, 1e-3, 1e-2, 1e-1)
@@ -71,7 +71,10 @@ def main():
         feat = blocks_feature(BLOCK_SETS[sel["blocks"]])
         for seed in TEST_SEEDS:
             for gname, gate in ((prefix, lambda: "rail"), (prefix + "_gate", lambda: xp.DomainThresholdGate(0.25, 0.1)),
-                                (prefix + "_gate_reverse", lambda: xp.DomainThresholdGate(0.25, 0.1, reverse_q=0.01))):
+                                (prefix + "_gate_reverse", lambda: xp.DomainThresholdGate(0.25, 0.1, reverse_q=0.01)),
+                                *(() if sel["blocks"] == "global" else  # no class token among these features
+                                  ((prefix + "_gate_reverse_cls10", lambda: xp.DomainThresholdGate(
+                                      0.25, 0.1, reverse_q=0.008, reverse_slice=SLICES[BLOCKS.index("cls10")])),))):
                 if any(r["method"] == gname and r["seed"] == seed for r in results["test"]):
                     continue
                 t0 = time.time()

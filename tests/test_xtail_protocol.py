@@ -190,6 +190,12 @@ def test_reverse_gate_keeps_last_and_only_predicts_unlearned_classes_for_taken_b
     p = torch.softmax(100 * torch.as_tensor(data["d1"]["test_global"] @ np.concatenate([data[n]["text"] for n in data]).T), 1)
     mask = gate(method, data["d1"]["test_global"], p, learned=4, domains=[(0, 4)])
     assert not mask.any() and torch.equal(gate.last_taken_back, p.argmax(1) < 4)
+    sliced = xp.DomainThresholdGate(0.25, 0.1, reverse_q=1.0, reverse_slice=(0, 8))  # cosine on one block
+    mask = sliced(method, data["d1"]["test_global"], p, learned=4, domains=[(0, 4)])
+    assert not mask.any() and torch.equal(sliced.last_taken_back, p.argmax(1) < 4)
+    assert np.allclose(xp.run_stream(data, xp.DualRAIL(), seed=0, gate=sliced)[-1], base[-1])
+    with pytest.raises(ValueError):  # a block the stored features do not have
+        xp.DomainThresholdGate(0.25, 0.1, reverse_q=0.5, reverse_slice=(16, 32))(method, data["d1"]["test_global"], p, 4, [(0, 4)])
 
 
 def test_unseen_domains_training_data_never_affects_earlier_rows():

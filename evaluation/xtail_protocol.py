@@ -258,13 +258,16 @@ class DomainThresholdGate:
 
     With `reverse_q`, the gate also takes images back: an admitted image whose similarity to every
     learned domain d is below the reverse_q-quantile of d's nearest-neighbour similarities is not
-    admitted, and run_stream predicts it among the classes not yet learned (`last_taken_back`).
+    admitted, and run_stream predicts it among the classes not yet learned (`last_taken_back`). With
+    `reverse_slice` (start, end), the take-back test uses cosine similarity on that slice of the features
+    (one feature block, e.g. the layer-10 class token) instead of the kernel.
     Needs a method with stored features X, labels y and a kernel _k (DualRAIL)."""
 
-    def __init__(self, q, min_mass=0.0, strip=0, reverse_q=None):
+    def __init__(self, q, min_mass=0.0, strip=0, reverse_q=None, reverse_slice=None):
         """strip: number of trailing non-feature columns in the test features (image ids)."""
         self.q, self.min_mass, self.strip, self.reverse_q = q, min_mass, strip, reverse_q
-        self.nn, self._owner = {}, None
+        self.reverse_slice = reverse_slice
+        self.nn, self.nn_rev, self._owner = {}, {}, None
 
     def _rows(self, method, off, n):
         y = torch.as_tensor(method.y, device=method.X.device)
@@ -280,6 +283,31 @@ class DomainThresholdGate:
             self.nn[off] = torch.cat(nn)
         return self.nn[off]
 
+    def _block(self, X):
+        a, b = self.reverse_slice
+        return torch.nn.functional.normalize(X[:, a:b], dim=1)
+
+    def _rev_sim(self, method, Xq, Xd):
+        """Similarity used by the take-back test: the kernel, or cosine on `reverse_slice`."""
+        if self.reverse_slice is None:
+            return self._max_sim(method, Xq, Xd)
+        if len(Xq) == 0:
+            return torch.zeros(0)
+        Bd = self._block(Xd)
+        return torch.cat([(self._block(Xq[i : i + 2048]) @ Bd.T).max(1).values.cpu() for i in range(0, len(Xq), 2048)])
+
+    def _nn_rev(self, method, off, Xd):
+        if self.reverse_slice is None:
+            return self._nn(method, off, Xd)
+        if off not in self.nn_rev:
+            Bd, nn = self._block(Xd), []
+            for i in range(0, len(Bd), 2048):
+                S = Bd[i : i + 2048] @ Bd.T
+                S[S >= 1 - 1e-5] = -2  # self and exact duplicates
+                nn.append(S.max(1).values.cpu())
+            self.nn_rev[off] = torch.cat(nn)
+        return self.nn_rev[off]
+
     @property
     def tau(self):
         return {off: float(torch.quantile(s, self.q)) for off, s in self.nn.items()}
@@ -291,12 +319,14 @@ class DomainThresholdGate:
 
     def __call__(self, method, X, p, learned, domains):
         if self._owner is not method:  # thresholds belong to one model's stored features
-            self.nn, self._owner = {}, method
+            self.nn, self.nn_rev, self._owner = {}, {}, method
         mask = p.argmax(1) < learned
         rej = (~mask) & (p[:, :learned].sum(1) >= self.min_mass)
         self.last_rescued = torch.zeros_like(mask)  # Which admitted images were rescued
         self.last_taken_back = torch.zeros_like(mask)
         X = X[:, : X.shape[1] - self.strip] if self.strip else X
+        if self.reverse_slice is not None and self.reverse_slice[1] > X.shape[1]:
+            raise ValueError(f"reverse_slice {self.reverse_slice} is outside the {X.shape[1]}-dimensional features")
         Xt = torch.as_tensor(X, dtype=torch.float32, device=DEV)
         take_back = self.reverse_q is not None and learned < p.shape[1]  # nothing to take back to at the end
         far = torch.ones(len(X), dtype=torch.bool)
@@ -309,8 +339,8 @@ class DomainThresholdGate:
             if take_back:
                 adm = mask | rej
                 s = torch.full((len(X),), float("inf"))
-                s[adm] = self._max_sim(method, Xt[adm.to(Xt.device)], Xd)
-                far &= s < float(torch.quantile(nn, self.reverse_q))
+                s[adm] = self._rev_sim(method, Xt[adm.to(Xt.device)], Xd)
+                far &= s < float(torch.quantile(self._nn_rev(method, off, Xd), self.reverse_q))
         mask = mask.clone()
         mask[rej] = ok
         self.last_rescued[rej] = ok

@@ -153,10 +153,42 @@ classes.
 - **A better take-back signal?** Rules adding zero-shot CLIP's mass or probability ratio on the
   not-yet-learned classes, or a logistic score over these and the adapter's confidence, were selected on
   validation and checked on seeds 1-5. None beat the plain similarity threshold. Each bought a little
-  more Transfer with Average, and at equal Average cost the plain threshold was as good or better. The
-  oracle still sits at +1.9; the signals tried cannot find it.
+  more Transfer with Average, and at equal Average cost the plain threshold was as good or better.
 
-Final result (order I, held-out seeds 11-15): **62.16 / 73.61 / 84.52**, against 61.55 / 71.63 / 82.84 for
+Result at this point (order I, held-out seeds 11-15): 62.16 / 73.61 / 84.52.
+
+## Phase 7 -- How close to the ceiling?
+
+Why is the ceiling +1.9 and not much more? Only 4-5% of unseen-domain images are admitted, and for those
+zero-shot CLIP's best not-yet-learned class is right less than half the time; the rest of the Transfer
+error is CLIP's own. So the question became how much of the +1.9 a similarity signal can reach.
+
+- **Many signals, one table.** For every admitted image: kernel similarity (nearest, top-5, to the
+  top class), cosine in each of the five feature blocks separately, and Mahalanobis distance, each as a
+  per-domain percentile. AUROC for "this image is from an unseen domain": the layer-10 class token
+  alone 0.956, the full kernel 0.942, the final embedding only 0.818. The intermediate class token
+  separates domains better than any combination including it.
+- **A wrong turn in selection.** The rule that had chosen the first reverse gate's percentile ("most
+  Transfer with no Average loss on validation") pushed the class token's threshold too loose. On
+  seeds 1-5 it gained Transfer but lost 0.04 Average against the full-kernel gate, a fail by the rule
+  set for adopting a new signal. A balanced criterion (most Transfer + Average on validation) picks the
+  0.8th percentile. Applied to the old signal it picks the same percentile as before, so it is not
+  tailored to the new one. But it was adopted after seeing the development seeds, and is reported as
+  such.
+- **Development checks, then a final run.** The class-token gate beat the full-kernel gate on seeds
+  1-5 of all three settings (+0.66 / +0.28 / +1.02 Transfer, Average up too). On fresh seeds 16-20 it
+  did again (+0.70 / +0.30 / +0.93), positive on every seed. It reaches about 70% of the ceiling on
+  order I, against 35% before.
+- **What is left** is mostly Food101, Flowers and SUN397 images that look like Caltech101's own
+  training images. Caltech101 has pizza, sunflower and lotus classes. A domain-similarity signal
+  cannot separate those.
+- **A bug caught.** Rerunning the tuning-protocol table with the new gate, the row for RAIL's full
+  protocol came out identical, seed for seed, to the rescue gate alone. Those features are only the
+  final embedding, so the class-token slice was empty and the gate silently never fired. An early
+  look at one seed had been read as "the class token repairs the wide-kernel case", which was wrong.
+  The gate now raises an error for a slice outside the features, and those runs were discarded.
+
+Final result (order I, held-out seeds 16-20): **62.75 / 73.76 / 84.53**, against 61.55 / 71.71 / 82.94 for
 Dual-RAIL in the same harness and best published 63.3 / 72.7 / 83.1 (other code).
 
 ## Lessons
@@ -169,3 +201,4 @@ Dual-RAIL in the same harness and best published 63.3 / 72.7 / 83.1 (other code)
   selection loop.
 - Record narrow misses as misses.
 - Ask where a metric is lost before accepting that it is fixed "by construction".
+- A result identical to the baseline, seed for seed, is a bug until shown otherwise.
