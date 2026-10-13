@@ -191,6 +191,24 @@ error is CLIP's own. So the question became how much of the +1.9 a similarity si
 Final result (order I, held-out seeds 16-20): **62.75 / 73.76 / 84.53**, against 61.55 / 71.71 / 82.94 for
 Dual-RAIL in the same harness and best published 63.3 / 72.7 / 83.1 (other code).
 
+## Phase 8 -- A second backbone
+
+Everything so far used CLIP ViT-B/16. CLIP ViT-L/14 tests whether the method is tied to that one model.
+
+- **Same images, same relative depths.** The class token is taken at layer 20 of 24, and pooled patch
+  tokens at 16 and 20. Encoding took about two hours on the GTX 1070. A sanity check: ViT-L/14 zero-shot
+  accuracy on Aircraft is 29.9%, against 24.2% for B/16, in line with the CLIP paper.
+- **Nothing re-tuned.** Validation on ViT-L/14 also picks ML-RAIL's γ 0.2. For RAIL it picks 0.4, so
+  RAIL was run with both widths; on test the frozen 0.1 is slightly better.
+- **The rule passed in all three settings**: ML-RAIL above RAIL, both gates above ML-RAIL, and Transfer
+  above zero-shot. The gains are smaller than on B/16 (order I: +0.94 / +1.32 / +1.28). The rescue gate
+  on its own again overshoots its Transfer tolerance, and the reverse gate again makes up for it.
+- **A bug avoided.** Both backbones used seeds 16-20, and the figure script filtered results by seed
+  only. It was fixed to filter by backbone too before the B/16 tables were regenerated.
+
+Final result on ViT-L/14 (order I, seeds 16-20): **71.51 / 79.98 / 88.08**, against 70.57 / 78.66 / 86.81
+for Dual-RAIL.
+
 ## Lessons
 
 - Change the benchmark when it is confounded; don't explain the result away.

@@ -8,7 +8,8 @@ training and without forgetting. It extends RAIL (NeurIPS 2024) [1] with the sam
 frozen backbone, shots, class names and prompt. On held-out seeds of the X-TAIL benchmark it reaches
 **62.75 Transfer, 73.76 Average and 84.53 Last accuracy**, against 61.55 / 71.71 / 82.94 for RAIL in the
 same harness. Transfer is the accuracy on domains not yet learned. Here it ends up 1.2 points above
-zero-shot CLIP's, which RAIL-style methods otherwise inherit unchanged.
+zero-shot CLIP's, which RAIL-style methods otherwise inherit unchanged. On a second backbone, CLIP
+ViT-L/14, with every setting kept, the gains are smaller but hold in every setting (Table 4).
 
 The method has three parts:
 
@@ -76,6 +77,22 @@ seeds 6–10 and 11–15, agree with them to within 0.2 for every method they sh
 - With ML-RAIL's five blocks kept and only γ and λ chosen on the first domain, ML-RAIL gains +0.35 Average
   and +0.3 Last over RAIL. The gates work as before on top of it, and the class-token reverse gate adds the
   same +1.3 Transfer as under all-domain tuning.
+
+### Second backbone: CLIP ViT-L/14
+
+<p align="center"><img src="docs/figures/xtail_table_backbone.png" width="88%"></p>
+<p align="center"><sub><b>Table 4.</b> CLIP ViT-L/14 (24 layers), seeds 16–20, with every setting kept from ViT-B/16: γ, λ, fusion weight and both gates. The feature blocks sit at the same relative depths (class token at layer 20; pooled patch tokens at 16 and 20). RAIL also appears with γ 0.4, the width ViT-L/14's validation prefers. Δ is against the stronger of the two RAIL rows.</sub></p>
+
+- **Every part of the rule set before the run passed in all three settings:**
+  - ML-RAIL above the stronger RAIL on Average and Last;
+  - both gates above ML-RAIL on Average and Transfer;
+  - Transfer above zero-shot CLIP's.
+- **The gains are smaller than on ViT-B/16:** order I gives +0.94 Transfer, +1.32 Average and +1.28 Last,
+  against +1.20 / +2.05 / +1.59. The stronger backbone leaves less for the adapter and the gates to fix.
+- **ML-RAIL's kernel width needs no change:** validation on ViT-L/14 also picks γ 0.2. For RAIL,
+  validation prefers 0.4, but on test it is slightly worse than 0.1.
+- **The rescue gate alone again costs Transfer beyond its tolerance** on order I (−0.21) and at 5 shots
+  (−0.25). The reverse gate recovers it with room to spare (+1.16 and +1.43).
 
 ## Method
 
@@ -221,11 +238,13 @@ classes overlap other domains.
 
 ## Limitations
 
-- One backbone (CLIP ViT-B/16) and one benchmark family.
+- Two backbones of one family (CLIP ViT-B/16 and ViT-L/14) and one benchmark family. The tuning-protocol
+  check and the signal study are on ViT-B/16 only.
 - The headline gain depends on tuning with all domains' validation data (Table 3). Under RAIL's full
   first-domain protocol it disappears.
 - The reverse gate's selection criterion was changed after seeing development results (see above).
-- The rescue gate alone is unreliable at 5 shots; the combined method is not.
+- The rescue gate alone is unreliable at 5 shots, and on ViT-L/14 also on order I; the combined method
+  is not.
 - The dual adapter stores all training features, as RAIL's does. A fixed-memory version with random
   features comes within 0.3 Average and 0.5 Last.
 - The rescue gate recovers about 60% of its oracle's Average headroom, and the reverse gate about 70% of
@@ -243,8 +262,8 @@ classes overlap other domains.
   rescue gate's 5-shot Transfer cost.
 - **Tuning on the first domain.** A selection criterion that is less noisy on a single domain than
   regression error.
-- **Other backbones and longer streams.** CLIP ViT-L/14 or SigLIP, and streams of 20 or more domains for
-  the fixed-memory adapter.
+- **Other pretraining and longer streams.** SigLIP or another non-CLIP backbone, and streams of 20 or more
+  domains for the fixed-memory adapter.
 
 ## Project history
 
@@ -255,6 +274,7 @@ criteria; its code is not part of this repository. The work then moved to X-TAIL
 
 - [docs/RESEARCH_LOG.md](docs/RESEARCH_LOG.md): the full path, including negative results.
 - [docs/REPORT_XTAIL.md](docs/REPORT_XTAIL.md): the technical report.
+- [docs/WRITEUP.md](docs/WRITEUP.md): a short paper-style write-up of the method and results.
 
 ## Reproducing
 
@@ -271,6 +291,7 @@ python scripts/reproduce.py --from evaluate  # once the data and features are ca
 | Download and verify the datasets | `scripts/setup_xtail_data.py` |
 | Cache CLIP ViT-B/16 features, then the intermediate layers | `scripts/xtail_encode.py`, `scripts/xtail_encode_extra.py` |
 | Tables 1–2 on seeds 16–20, and the earlier runs on seeds 6–10 and 11–15 | `scripts/evaluate.py` |
+| ViT-L/14: features, kernel-width check, Table 4 | `scripts/xtail_encode_backbone.py`, `scripts/experiments/run_xtail_backbone_gamma.py`, `scripts/evaluate.py --backbone vitl14` |
 | Table 3 and the rescue gate's checks | `scripts/experiments/run_xtail_first_domain_tuning.py`, `run_xtail_gate_sensitivity.py` |
 | Reverse gate: headroom, take-back signals (Figure 5) | `scripts/experiments/run_xtail_transfer_headroom.py`, `run_xtail_ceiling_signals.py`, `run_xtail_takeback_signals.py` |
 | Figures, tables, `results/xtail_results.json` | `scripts/plot_xtail_figures.py` |

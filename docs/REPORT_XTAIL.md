@@ -193,6 +193,49 @@ It passed in all three settings, as it had on development seeds 1–5 (+0.66 / +
 **Gate settings.** For the rescue gate on order I, over q ∈ {0.25, 0.5} and m ∈ {0.05, 0.1}, ΔAverage ranges
 from +0.69 to +0.92 and ΔTransfer from −0.09 to −0.21. The chosen point (0.25, 0.1) is not a sharp optimum.
 
+## Second backbone: CLIP ViT-L/14 (seeds 16–20)
+
+**Setup.**
+- Features are encoded on exactly the same images, with the blocks at the same relative depths: the class
+  token at layer 20 of 24, and GeM-pooled patch tokens at layers 16 and 20.
+- Every setting is kept from ViT-B/16: γ, λ, the fusion weight, the rescue gate (q 0.25, m 0.1) and the
+  reverse gate (0.8th percentile).
+- A validation check of γ on ViT-L/14 (`run_xtail_backbone_gamma.py`) picks 0.2 for ML-RAIL, the frozen
+  value. For RAIL it picks 0.4 against the frozen 0.1, so RAIL is run with both values. The rule compares
+  against the stronger of the two.
+
+**Rule, fixed before the run.** In each setting:
+1. ML-RAIL above the stronger RAIL on mean Average and Last;
+2. both gates above ML-RAIL on mean Average and Transfer;
+3. the full method's Transfer above zero-shot CLIP's.
+
+All three passed in all three settings.
+
+| Setting | Method | Transfer | Average | Last |
+|---|---|---|---|---|
+| Order I | Zero-shot CLIP | 70.57 | 66.49 | 66.49 |
+| | RAIL, γ 0.1 / γ 0.4 | 70.57 | 78.66 / 78.58 | 86.81 / 86.76 |
+| | ML-RAIL | 70.57 | 79.44 | 88.08 |
+| | + rescue gate | 70.35 | 79.89 | 88.08 |
+| | **+ rescue and reverse gates** | **71.51** | **79.98** | **88.08** |
+| Order II | Zero-shot CLIP | 65.48 | 66.62 | 66.62 |
+| | RAIL, γ 0.1 / γ 0.4 | 65.48 | 75.11 / 75.09 | 86.78 / 86.77 |
+| | ML-RAIL | 65.48 | 75.79 | 88.14 |
+| | + rescue gate | 65.43 | 76.01 | 88.14 |
+| | **+ rescue and reverse gates** | **66.11** | **76.26** | **88.14** |
+| 11 domains, 5-shot | Zero-shot CLIP | 66.66 | 63.31 | 63.31 |
+| | RAIL, γ 0.1 / γ 0.4 | 66.66 | 73.76 / 73.65 | 81.73 / 81.42 |
+| | ML-RAIL | 66.66 | 74.59 | 83.39 |
+| | + rescue gate | 66.41 | 75.47 | 83.39 |
+| | **+ rescue and reverse gates** | **67.84** | **75.56** | **83.39** |
+
+- **Gains over RAIL** (Transfer / Average / Last): +0.94 / +1.32 / +1.28 on order I, +0.62 / +1.14 /
+  +1.36 on order II, +1.18 / +1.80 / +1.66 at 5 shots. All are smaller than on ViT-B/16, as expected
+  when the frozen backbone itself is stronger.
+- **RAIL's validation-preferred γ** is slightly worse on test than the frozen one in all three settings.
+- **The rescue gate alone** costs −0.21 Transfer on order I and −0.25 at 5 shots, beyond its 0.2
+  tolerance. The reverse gate on top adds +1.16 and +1.43.
+
 ## Where Transfer is lost (development, order I, seeds 1–5 unless noted)
 
 **The ceiling.** An oracle takes back exactly the admitted images of domains not yet learned: +1.94
@@ -333,7 +376,8 @@ object classes overlap other domains.
 
 ## Limitations
 
-- One backbone (CLIP ViT-B/16) and one benchmark family (X-TAIL and its variants).
+- Two backbones of one family (CLIP ViT-B/16, ViT-L/14) and one benchmark family (X-TAIL and its
+  variants). The tuning-protocol check and the signal study were run on ViT-B/16 only.
 - The gain over RAIL depends on tuning with all domains' validation data. Under RAIL's protocol with the
   five blocks kept it is smaller, and under RAIL's full protocol it is gone (table above).
 - The reverse gate's selection criterion was changed after seeing development results.
@@ -352,7 +396,8 @@ object classes overlap other domains.
 - **The rescue gate on the class token,** the mirror image of the reverse gate.
 - **Thresholds with few shots:** shrink per-domain thresholds toward a pooled estimate.
 - **First-domain tuning:** a selection criterion that is less noisy than regression error on one domain.
-- **Other backbones** (CLIP ViT-L/14, SigLIP) and **longer domain streams** with the fixed-memory adapter.
+- **Other pretraining** (SigLIP or a non-CLIP backbone) and **longer domain streams** with the fixed-memory
+  adapter.
 
 ## Reproducing
 

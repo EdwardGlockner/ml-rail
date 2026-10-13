@@ -29,25 +29,27 @@ import torch  # noqa: E402
 
 from data.real.xtail import DOMAINS, DOMAINS_11, ORDER_II, XTAIL_ROOT  # noqa: E402
 from evaluation import xtail_protocol as xp  # noqa: E402
-from evaluation.ml_rail import BLOCKS, SLICES, blocks_feature, load_with_extra  # noqa: E402
+from evaluation.ml_rail import BLOCKS, block_slices, blocks_feature, load_with_extra  # noqa: E402
 
 SETTINGS = {"order_I": (DOMAINS, 16), "order_II": (ORDER_II, 16), "11_domains_5shot": (DOMAINS_11, 5)}
 GATE_Q, GATE_MIN_MASS = 0.25, 0.1  # rescue-gate settings selected on validation
 REVERSE_Q = 0.01  # reverse gate, selected on validation (largest q with no loss in Average)
 # reverse gate on the layer-10 class token, selected on validation (largest Transfer + Average)
-REVERSE_CLS10_Q, CLS10 = 0.008, SLICES[BLOCKS.index("cls10")]
+REVERSE_CLS10_Q = 0.008
 
 
 def log(msg):
     print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
 
 
-def methods(dtype):
-    """name -> (model factory, feature, gate factory)."""
+def methods(dtype, cls10):
+    """name -> (model factory, feature, gate factory). cls10: column range of the class-token block."""
     ml_feat = blocks_feature(BLOCKS)
     return {
         "zero_shot": (xp.ZeroShot, "global", lambda: "rail"),
         "rail_dual": (lambda: xp.DualRAIL(gamma=0.1, lam=1e-3, dtype=dtype), "global", lambda: "rail"),
+        # RAIL with the kernel width ViT-L/14's validation prefers (scripts/experiments/run_xtail_backbone_gamma.py)
+        "rail_dual_gamma0.4": (lambda: xp.DualRAIL(gamma=0.4, lam=1e-3, dtype=dtype), "global", lambda: "rail"),
         "ml_rail": (lambda: xp.DualRAIL(gamma=0.2, lam=1e-3, dtype=dtype), ml_feat, lambda: "rail"),
         "ml_rail_gate": (lambda: xp.DualRAIL(gamma=0.2, lam=1e-3, dtype=dtype), ml_feat,
                          lambda: xp.DomainThresholdGate(GATE_Q, GATE_MIN_MASS)),
@@ -55,7 +57,7 @@ def methods(dtype):
                                  lambda: xp.DomainThresholdGate(GATE_Q, GATE_MIN_MASS, reverse_q=REVERSE_Q)),
         "ml_rail_gate_reverse_cls10": (lambda: xp.DualRAIL(gamma=0.2, lam=1e-3, dtype=dtype), ml_feat,
                                        lambda: xp.DomainThresholdGate(GATE_Q, GATE_MIN_MASS, reverse_q=REVERSE_CLS10_Q,
-                                                                      reverse_slice=CLS10)),
+                                                                      reverse_slice=cls10)),
     }
 
 
@@ -66,29 +68,32 @@ def main():
     p.add_argument("--methods", default="zero_shot,rail_dual,ml_rail,ml_rail_gate,ml_rail_gate_reverse,"
                                         "ml_rail_gate_reverse_cls10")
     p.add_argument("--float64", action="store_true", help="float64 kernel solves (default float32)")
+    p.add_argument("--backbone", default="vitb16", help="feature cache: vitb16, or one from xtail_encode_backbone.py")
     a = p.parse_args()
     dtype = torch.float64 if a.float64 else torch.float32
     path = XTAIL_ROOT / "results" / "evaluate.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     results = json.load(open(path)) if path.exists() else []
-    done = {(r["setting"], r["method"], r["seed"], r["dtype"]) for r in results}
+    done = {(r["setting"], r["method"], r["seed"], r["dtype"], r.get("backbone", "vitb16")) for r in results}
     for setting in a.settings.split(","):
         domains, shots = SETTINGS[setting]
-        data = load_with_extra("single", list(domains))
+        data = load_with_extra("single", list(domains), a.backbone)
         zs = xp.zero_shot_probs(data)
+        cls10 = block_slices(data)[BLOCKS.index("cls10")]
         for seed in (int(s) for s in a.seeds.split(",")):
             for name in a.methods.split(","):
-                key = (setting, name, seed, str(dtype).split(".")[-1])
+                key = (setting, name, seed, str(dtype).split(".")[-1], a.backbone)
                 if key in done:
                     continue
-                make, feat, gate = methods(dtype)[name]
+                make, feat, gate = methods(dtype, cls10)[name]
                 t0 = time.time()
                 table = xp.run_stream(data, make(), seed, feat=feat, fusion_weight=0.8, shots=shots, zs=zs, gate=gate())
                 results.append({"setting": setting, "method": name, "seed": seed, "dtype": key[3],
+                                **({} if a.backbone == "vitb16" else {"backbone": a.backbone}),
                                 **xp.metrics(table), "table": table.tolist()})
                 json.dump(results, open(path, "w"), indent=1)
                 m = results[-1]
-                log(f"{setting} seed {seed} {name} ({key[3]}): {m['transfer']:.2f} / {m['average']:.2f} / {m['last']:.2f} "
+                log(f"{a.backbone} {setting} seed {seed} {name} ({key[3]}): {m['transfer']:.2f} / {m['average']:.2f} / {m['last']:.2f} "
                     f"[{time.time() - t0:.0f}s]")
 
 

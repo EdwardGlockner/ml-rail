@@ -12,6 +12,7 @@ thresholds in fig. 3 are recomputed from cached features in seconds.
   docs/figures/xtail_table_main.png      table 1 main results
   docs/figures/xtail_table_settings.png  table 2 task order and shot count
   docs/figures/xtail_table_tuning.png    table 3 effect of the tuning protocol
+  docs/figures/xtail_table_backbone.png  table 4 CLIP ViT-L/14, every setting kept from ViT-B/16
 
 Usage:
     python scripts/plot_xtail_figures.py
@@ -65,12 +66,12 @@ plt.rcParams.update({
 })
 
 
-def evaluation(seeds=SEEDS):
-    """(setting, method) -> list of runs over `seeds` (float32)."""
+def evaluation(seeds=SEEDS, backbone="vitb16"):
+    """(setting, method) -> list of runs over `seeds` (float32) for one backbone."""
     rows = json.load(open(RESULTS / "evaluate.json"))
     out = {}
     for r in rows:
-        if r["dtype"] == "float32" and r["seed"] in seeds:
+        if r["dtype"] == "float32" and r["seed"] in seeds and r.get("backbone", "vitb16") == backbone:
             out.setdefault((r["setting"], r["method"]), []).append(r)
     for runs in out.values():
         runs.sort(key=lambda r: r["seed"])
@@ -385,18 +386,41 @@ def tables(ev, ev_rep, tuning):
     render_table(FIG / "xtail_table_tuning.png", header, rows, [2.6, 1.95, 1.1, 1.05, 1.05, 1.25], dec)
 
 
-def export_results(ev, ev_earlier, ev_rep, tuning, sens, headroom, ceil):
+L14_METHODS = (("Zero-shot CLIP", "zero_shot"), ("RAIL (Dual), γ 0.1", "rail_dual"), ("RAIL (Dual), γ 0.4", "rail_dual_gamma0.4"),
+               ("ML-RAIL (ours)", "ml_rail"), ("+ rescue gate (ours)", "ml_rail_gate"),
+               ("+ rescue and reverse gates (ours)", REVERSE))
+
+
+def table_backbone(ev_l14):
+    header = ["Setting", "Method", "Transfer", "Average", "Last", "Δ Avg / Last"]
+    rows, dec = [], []
+    for g, (b, label) in enumerate(SETTINGS):
+        base = max((ev_l14[(b, "rail_dual")], ev_l14[(b, "rail_dual_gamma0.4")]),
+                   key=lambda runs: np.mean([r["average"] for r in runs]))  # the stronger RAIL
+        for j, (name, key) in enumerate(L14_METHODS):
+            runs = ev_l14[(b, key)]
+            c = cells(runs) if key != "zero_shot" else [(m, None) for m, _ in cells(runs, ())]
+            rows.append({"cells": [label if j == 0 else "", name] + c
+                         + ["" if key in ("zero_shot", "rail_dual", "rail_dual_gamma0.4") else delta(runs, base)],
+                         "group": g, "shade": key == REVERSE, "rule_before": g > 0 and j == 0})
+            dec.append([0, 0, 2, 2, 2, 0])
+    render_table(FIG / "xtail_table_backbone.png", header, rows, [1.45, 2.6, 0.85, 1.05, 1.05, 1.25], dec)
+
+
+def export_results(ev, ev_earlier, ev_rep, tuning, sens, headroom, ceil, ev_l14):
     def runs(rows):
         return [{"seed": r["seed"], **{k: round(r[k], 3) for k in ("transfer", "average", "last")},
                  "table": np.round(np.array(r["table"]), 2).tolist()} for r in rows]
     out = {
-        "description": "X-TAIL results (CLIP ViT-B/16, RAIL's single prompt). 'settings': the final run on held-out "
+        "description": "X-TAIL results (CLIP ViT-B/16 unless noted, RAIL's single prompt). 'settings': the final run on held-out "
                        "seeds 16-20, where ml_rail_gate_reverse_cls10 is the reported method and ml_rail_gate_reverse "
                        "the earlier full-kernel reverse gate; 'run_seeds_11_15': the held-out run of the full-kernel "
                        "reverse gate; 'replication_seeds_6_10': the first held-out run (no reverse gate). table[t][d] is "
                        "the accuracy (%) on domain d after learning domains 0..t; Transfer/Average/Last as in RAIL's "
                        "code. The tuning protocol and gate sensitivity checks use seeds 6-10; the Transfer headroom "
-                       "and take-back signal analyses use development seeds 1-5 and validation.",
+                       "and take-back signal analyses use development seeds 1-5 and validation. 'vitl14_seeds_16_20': "
+                       "CLIP ViT-L/14 with every setting kept from ViT-B/16 (plus RAIL at the kernel width ViT-L/14's "
+                       "validation prefers).",
         "published_order_I_16shot": {name: dict(zip(("transfer", "average", "last"), v)) for name, _, v in PUBLISHED},
         "settings": {label: {m: runs(ev[(b, m)]) for m in ("zero_shot", "rail_dual", "ml_rail", "ml_rail_gate",
                                                            "ml_rail_gate_reverse", REVERSE)}
@@ -414,6 +438,7 @@ def export_results(ev, ev_earlier, ev_rep, tuning, sens, headroom, ceil):
                                                  for v, x in run.items() if v != "diagnostics"},
                                               "diagnostics": run["diagnostics"]} for k, run in headroom.items()},
         "take_back_signals_development": ceil,
+        "vitl14_seeds_16_20": {label: {m: runs(ev_l14[(b, m)]) for _, m in L14_METHODS} for b, label in SETTINGS},
     }
     path = REPO_ROOT / "results" / "xtail_results.json"
     path.parent.mkdir(exist_ok=True)
@@ -423,12 +448,14 @@ def export_results(ev, ev_earlier, ev_rep, tuning, sens, headroom, ceil):
 if __name__ == "__main__":
     FIG.mkdir(parents=True, exist_ok=True)
     ev, ev_earlier, ev_rep = evaluation(SEEDS), evaluation(EARLIER_SEEDS), evaluation(REPLICATION_SEEDS)
+    ev_l14 = evaluation(SEEDS, "vitl14")
     tuning = json.load(open(RESULTS / "first_domain_tuning.json"))
     sens = json.load(open(RESULTS / "gate_sensitivity.json"))
     headroom = json.load(open(RESULTS / "transfer_headroom.json"))
     ceil = json.load(open(RESULTS / "ceiling" / "analysis.json"))
-    export_results(ev, ev_earlier, ev_rep, tuning, sens, headroom, ceil)
+    export_results(ev, ev_earlier, ev_rep, tuning, sens, headroom, ceil, ev_l14)
     tables(ev, ev_rep, tuning)
+    table_backbone(ev_l14)
     fig_method()
     fig_steps(ev)
     fig_thresholds()

@@ -17,6 +17,9 @@ Each step caches its output under $XTAIL_ROOT, so an interrupted run continues w
   ceiling      take-back signals per feature block (the       scripts/experiments/run_xtail_ceiling_signals.py
   ceiling_II   class-token signal), order I, order II,
   ceiling_5shot  5-shot; then the analysis (fig. 5)
+  encode_l14   CLIP ViT-L/14 features (same images)          scripts/xtail_encode_backbone.py
+  gamma_l14    ViT-L/14 kernel-width check on validation     scripts/experiments/run_xtail_backbone_gamma.py
+  evaluate_l14 table 4: ViT-L/14, seeds 16-20                scripts/evaluate.py --backbone vitl14
   plot         figures, tables, results/xtail_results.json   scripts/plot_xtail_figures.py
 
 Usage:
@@ -48,6 +51,9 @@ STEPS = {
     "ceiling": "scripts/experiments/run_xtail_ceiling_signals.py --collect",
     "ceiling_II": "scripts/experiments/run_xtail_ceiling_signals.py --collect --setting order_II --runs test:1,test:2,test:3,test:4,test:5",
     "ceiling_5shot": "scripts/experiments/run_xtail_ceiling_signals.py --collect --analyze --setting 11_domains_5shot --runs test:1,test:2,test:3,test:4,test:5",
+    "encode_l14": "scripts/xtail_encode_backbone.py",
+    "gamma_l14": "scripts/experiments/run_xtail_backbone_gamma.py --backbone vitl14",
+    "evaluate_l14": "scripts/evaluate.py --backbone vitl14 --methods zero_shot,rail_dual,rail_dual_gamma0.4,ml_rail,ml_rail_gate,ml_rail_gate_reverse_cls10",
     "plot": "scripts/plot_xtail_figures.py",
 }
 

@@ -23,9 +23,12 @@ def l2(x):
     return x / (np.linalg.norm(x, axis=-1, keepdims=True) + 1e-8)
 
 
-def load_with_extra(prompts="single", domains=DOMAINS):
+def load_with_extra(prompts="single", domains=DOMAINS, backbone="vitb16"):
     """Cached features of every domain, including the extra blocks; `prompts="ensemble"` swaps in the
-    prompt-ensemble text head."""
+    prompt-ensemble text head. Another `backbone` loads FEATURES/<backbone> (scripts/xtail_encode_backbone.py),
+    whose files hold every block."""
+    if backbone != "vitb16":
+        return xp.load_features(domains, FEATURES / backbone)
     data = xp.load_features(domains)
     if prompts == "ensemble":
         xp.ensemble_text(data)
@@ -33,6 +36,13 @@ def load_with_extra(prompts="single", domains=DOMAINS):
         z = np.load(EXTRA / f"{n}.npz")
         d.update({k: z[k] for k in z.files})
     return data
+
+
+def block_slices(data, blocks=BLOCKS):
+    """Column range of each block in blocks_feature(blocks)'s output, from the cached feature widths."""
+    d = next(iter(data.values()))
+    edges = np.cumsum([0] + [d[f"train_{b}"].shape[1] for b in blocks])
+    return [(int(edges[i]), int(edges[i + 1])) for i in range(len(blocks))]
 
 
 def blocks_feature(blocks=BLOCKS, flip_train=False, flip_test=False):
