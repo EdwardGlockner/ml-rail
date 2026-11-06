@@ -76,9 +76,9 @@ seeds 6–10 and 11–15, agree with them to within 0.2 for every method they sh
   of each other on that one domain, so the selection is close to noise.
 - With that wide kernel the gates fail too. The rescue gate costs a full Transfer point, and a reverse gate
   on the same features wins back only 0.16 of it.
-- With ML-RAIL's five blocks kept and only γ and λ chosen on the first domain, ML-RAIL gains +0.35 Average
-  and +0.3 Last over RAIL. The gates work as before on top of it, and the class-token reverse gate adds the
-  same +1.3 Transfer as under all-domain tuning.
+- With ML-RAIL's five blocks kept and only γ and λ chosen on the first domain, ML-RAIL alone gains +0.35
+  Average and +0.33 Last over RAIL. The gates add the rest of the +1.42 Average in the full method and leave
+  Last unchanged. The class-token reverse gate adds the same +1.3 Transfer as under all-domain tuning.
 
 ### Second backbone: CLIP ViT-L/14
 
