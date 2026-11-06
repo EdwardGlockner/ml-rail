@@ -28,13 +28,14 @@ Last is unchanged by both gates.
 
 Three qualifications:
 
-1. **Tuning protocol.** The hyperparameters were chosen on validation data from all ten domains; RAIL tunes
-   on the first domain only (check on seeds 6–10).
-   - Under RAIL's protocol with the five feature blocks kept, the full method gives 62.75 / 73.04 / 83.13.
-     That is +1.20 Transfer, +1.42 Average and +0.33 Last over RAIL, instead of +1.20 / +2.11 / +1.67.
-   - Under RAIL's full protocol, with the feature set also chosen on the first domain, the selection falls
-     back to RAIL's final embedding with a wide kernel. The class token is then not among the features,
-     and the gain is gone: −0.82 / +0.06 / −0.43 with a full-kernel reverse gate.
+1. **Tuning protocol.** The hyperparameters were chosen on validation data from all ten domains. RAIL fixes
+   its features and grid-searches only λ and the kernel width, on the first domain (check on seeds 6–10).
+   - Under that protocol, with the five feature blocks kept, the full method gives 62.75 / 73.04 / 83.13.
+     That is +1.20 Transfer, +1.42 Average and +0.33 Last over RAIL, instead of +1.20 / +2.11 / +1.67. The
+     blocks and the gate settings still come from all-domain validation.
+   - If the feature set is also chosen on the first domain, which goes beyond RAIL's protocol, the
+     selection falls back to RAIL's final embedding with a wide kernel. The class token is then not among
+     the features, and the gain is gone: −0.82 / +0.06 / −0.43 with a full-kernel reverse gate.
 2. **Development history.**
    - The rescue gate's rule was revised once after a failed 5-shot result, and one test seed (seed 1) was
      used during its selection.
@@ -55,7 +56,7 @@ Three qualifications:
   follow RAIL's code exactly:
   - Transfer: mean accuracy on domains not yet learned.
   - Average: mean over all steps and domains.
-  - Last: mean after the final step.
+  - Last: mean over all domains after the final step.
 - **Replication.** RAIL's official code on our data gives 61.5 / 71.2 / 82.3. The paper reports 62.4 /
   71.9 / 82.4 (arXiv:2406.18868v3); LADA quotes 71.3 Average. Our harness's Dual-RAIL gives 61.55 / 71.71
   / 82.94 on seeds 16–20. The changes needed to run the official code are in
@@ -378,8 +379,9 @@ object classes overlap other domains.
 
 - Two backbones of one family (CLIP ViT-B/16, ViT-L/14) and one benchmark family (X-TAIL and its
   variants). The tuning-protocol check and the signal study were run on ViT-B/16 only.
-- The gain over RAIL depends on tuning with all domains' validation data. Under RAIL's protocol with the
-  five blocks kept it is smaller, and under RAIL's full protocol it is gone (table above).
+- The gain over RAIL depends on tuning with all domains' validation data. Under RAIL's protocol, with the
+  five blocks kept, it is smaller on Average and Last. If the feature set is also chosen on the first
+  domain, it is gone (table above).
 - The reverse gate's selection criterion was changed after seeing development results.
 - Transfer stays below MoRAM's 63.3, although the comparison crosses harnesses.
 - The dual adapter stores all training features, as Dual-RAIL does. The fixed-memory variant missed its

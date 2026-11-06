@@ -25,11 +25,13 @@ class token, the signal that best separates unseen from learned domains among th
 
 Two caveats matter for reading the numbers:
 
-- The hyperparameters were chosen on validation data from all ten domains; RAIL chooses its own on the
-  first domain only. Keeping the five feature blocks and choosing only γ and λ on the first domain, the full
-  method still gains +1.20 Transfer, +1.42 Average and +0.33 Last over RAIL. Under RAIL's full protocol,
-  with the feature set chosen on the first domain too, the selection falls back to RAIL's final embedding.
-  The class-token gate is then unavailable, and the gain is gone: −0.82 / +0.06 / −0.43 (Table 3).
+- The hyperparameters were chosen on validation data from all ten domains. RAIL fixes its features and
+  chooses only γ and λ, on the first domain. Under that protocol the full method still gains +1.20 Transfer,
+  +1.42 Average and +0.33 Last over RAIL: all of the Transfer gain holds, about two thirds of the Average
+  gain, and a fifth of the Last gain. The five feature blocks and the gate settings still come from
+  all-domain validation. If the feature set is also chosen on the first domain, which goes beyond RAIL's
+  protocol, the selection falls back to RAIL's final embedding. The class-token gate is then unavailable,
+  and the gain is gone: −0.82 / +0.06 / −0.43 (Table 3).
 - The rescue gate on its own costs Transfer. At 5 shots it misses its 0.2-point tolerance on two of four
   seed sets. With the reverse gate added, Transfer is above ML-RAIL's on every seed in every setting.
 
@@ -43,7 +45,7 @@ step, the model classifies test images from all domains among ~1,100 class names
 
 - **Transfer:** accuracy on domains not yet learned.
 - **Average:** accuracy over all steps.
-- **Last:** accuracy after the final step.
+- **Last:** accuracy over all domains after the final step.
 
 All numbers below are on seeds 16–20, run once after every setting was fixed. Two earlier held-out runs,
 seeds 6–10 and 11–15, agree with them to within 0.2 for every method they share (in
@@ -67,7 +69,7 @@ seeds 6–10 and 11–15, agree with them to within 0.2 for every method they sh
 ### Effect of the tuning protocol
 
 <p align="center"><img src="docs/figures/xtail_table_tuning.png" width="96%"></p>
-<p align="center"><sub><b>Table 3.</b> ML-RAIL with hyperparameters chosen on all domains' validation data (as above) or on the first domain's only (RAIL's protocol, by validation regression error). Order I, seeds 6–10. The gates' settings stay at the values chosen on all domains, because measuring their effect on Transfer needs domains not yet learned. *The final embedding alone has no layer-10 class token, so this row uses the reverse gate on the full kernel (1st percentile).</sub></p>
+<p align="center"><sub><b>Table 3.</b> ML-RAIL with hyperparameters chosen on all domains' validation data (as above) or on the first domain's only (by validation regression error, as RAIL chooses γ and λ; RAIL does not choose its features). Order I, seeds 6–10. The gates' settings stay at the values chosen on all domains, because measuring their effect on Transfer needs domains not yet learned. *The final embedding alone has no layer-10 class token, so this row uses the reverse gate on the full kernel (1st percentile).</sub></p>
 
 - Selecting the feature set on the first domain alone picks RAIL's final embedding with a wider kernel. That
   is *worse* than RAIL's published setting. The validation errors of all three feature sets are within 4%
@@ -240,8 +242,9 @@ classes overlap other domains.
 
 - Two backbones of one family (CLIP ViT-B/16 and ViT-L/14) and one benchmark family. The tuning-protocol
   check and the signal study are on ViT-B/16 only.
-- The headline gain depends on tuning with all domains' validation data (Table 3). Under RAIL's full
-  first-domain protocol it disappears.
+- The headline gain depends on tuning with all domains' validation data (Table 3). With γ and λ chosen on
+  the first domain, as RAIL does, it is +1.20 / +1.42 / +0.33. If the feature set is also chosen there, it
+  is gone.
 - The reverse gate's selection criterion was changed after seeing development results (see above).
 - The rescue gate alone is unreliable at 5 shots, and on ViT-L/14 also on order I; the combined method
   is not.

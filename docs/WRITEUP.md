@@ -19,9 +19,10 @@ inputs and its training-free design, and change three things.
 Both gates compare an image's similarity to each learned domain with a percentile of that domain's own
 nearest-neighbour similarities. On the X-TAIL benchmark (CLIP ViT-B/16, ten domains, 16 shots per class),
 the result is 62.75 Transfer, 73.76 Average and 84.53 Last accuracy on held-out seeds, against 61.55 /
-71.71 / 82.94 for RAIL in the same code. The gain depends on tuning with validation data from all domains;
-under RAIL's first-domain tuning protocol it shrinks or disappears. That and the other limitations are
-stated alongside the results.
+71.71 / 82.94 for RAIL in the same code. The gain depends on tuning with validation data from all domains.
+With the kernel settings chosen on the first domain, as RAIL does, it is +1.20 / +1.42 / +0.33; if the
+feature set is also chosen on that domain, it is gone. That and the other limitations are stated alongside
+the results.
 
 ## 1. Problem
 
@@ -32,7 +33,7 @@ domain. Three numbers summarize the 10 × 10 table of accuracies:
 
 - **Transfer:** accuracy on domains not yet learned.
 - **Average:** accuracy over all steps and domains.
-- **Last:** accuracy after the final step.
+- **Last:** accuracy over all domains after the final step.
 
 RAIL [1] solves this without gradient training. A frozen CLIP encoder feeds a kernel ridge regression
 whose solution is exact and independent of the order of domains, so nothing is forgotten. At test time,
@@ -107,12 +108,13 @@ variant with CIFAR-100 added:
 | 11 domains, 5-shot | 57.84 / 65.86 / 76.09 | 59.29 / 68.39 / 78.21 | +1.45 / +2.53 / +2.12 |
 
 **Tuning protocol.** These hyperparameters were chosen on validation data from all ten domains. RAIL
-chooses its own on the first domain only (seeds 6–10, order I):
+fixes its features and chooses only the kernel width and ridge, on the first domain (seeds 6–10, order I):
 
-- With the five blocks kept and only the kernel width and ridge chosen on the first domain, the gains
-  shrink to +1.20 / +1.42 / +0.33.
-- If the feature set is also chosen on the first domain, the selection falls back to RAIL's final
-  embedding with a wide kernel. The gain is then gone: −0.82 / +0.06 / −0.43.
+- With the five blocks kept and those two settings chosen on the first domain, the gains are
+  +1.20 / +1.42 / +0.33, against +1.20 / +2.11 / +1.67. The blocks and the gate settings still come from
+  all-domain validation.
+- If the feature set is also chosen on the first domain, which goes beyond RAIL's protocol, the selection
+  falls back to RAIL's final embedding with a wide kernel. The gain is then gone: −0.82 / +0.06 / −0.43.
 
 The validation errors of the candidate feature sets on that one domain differ by less than 4%, so that
 selection is close to noise.
